@@ -4,6 +4,12 @@ enum TransactionType {
   transfer, // Trasferimento tra due conti (es. Prelievo da Banca a Contanti)
 }
 
+enum TransactionSource {
+  manual,       // Inserito a mano dall'utente
+  csv,          // Importato da file CSV / Excel della banca
+  notification, // Letto automaticamente da notifica push della banca / Google Pay
+}
+
 class MoneyTransaction {
   final String id;
   final double amount;
@@ -14,9 +20,8 @@ class MoneyTransaction {
   final String? categoryId;  // Null se è un trasferimento
   final String note;
   final String? merchantName;
-  // Campi per tracciare movimenti importati tramite Open Banking (evita duplicati)
-  final bool isBankSynced;
-  final String? externalBankTransactionId;
+  final TransactionSource source;
+  final String? deduplicationKey; // Evita di importare due volte la stessa riga CSV
 
   MoneyTransaction({
     required this.id,
@@ -28,8 +33,8 @@ class MoneyTransaction {
     this.categoryId,
     this.note = '',
     this.merchantName,
-    this.isBankSynced = false,
-    this.externalBankTransactionId,
+    this.source = TransactionSource.manual,
+    this.deduplicationKey,
   });
 
   Map<String, dynamic> toMap() {
@@ -43,8 +48,8 @@ class MoneyTransaction {
       'categoryId': categoryId,
       'note': note,
       'merchantName': merchantName,
-      'isBankSynced': isBankSynced ? 1 : 0,
-      'externalBankTransactionId': externalBankTransactionId,
+      'source': source.name,
+      'deduplicationKey': deduplicationKey,
     };
   }
 
@@ -62,8 +67,11 @@ class MoneyTransaction {
       categoryId: map['categoryId'] as String?,
       note: map['note'] as String? ?? '',
       merchantName: map['merchantName'] as String?,
-      isBankSynced: (map['isBankSynced'] as int? ?? 0) == 1,
-      externalBankTransactionId: map['externalBankTransactionId'] as String?,
+      source: TransactionSource.values.firstWhere(
+        (e) => e.name == map['source'],
+        orElse: () => TransactionSource.manual,
+      ),
+      deduplicationKey: map['deduplicationKey'] as String?,
     );
   }
 }

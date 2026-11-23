@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'accounts_screen.dart';
 import 'add_transaction_screen.dart';
+import 'settings_screen.dart';
 import 'stats_screen.dart';
 import 'transactions_screen.dart';
 
@@ -18,6 +19,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     TransactionsScreen(),
     StatsScreen(),
     AccountsScreen(),
+    SettingsScreen(),
   ];
 
   @override
@@ -56,7 +58,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           NavigationDestination(
             icon: Icon(Icons.account_balance_outlined),
             selectedIcon: Icon(Icons.account_balance),
-            label: 'Conti & Banche',
+            label: 'Conti',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: 'Impostazioni',
           ),
         ],
       ),

@@ -2,18 +2,24 @@ import 'package:flutter/foundation.dart' hide Category;
 import '../models/account.dart';
 import '../models/category.dart';
 import '../models/transaction.dart';
+import '../services/csv_import_service.dart';
 import '../services/database_helper.dart';
-import '../services/open_banking_service.dart';
+import '../services/notification_reader_service.dart';
 
 class MoneyProvider extends ChangeNotifier {
   final DatabaseHelper _db = DatabaseHelper.instance;
-  final OpenBankingService _openBankingService = OpenBankingService();
+  final CsvImportService _csvService = CsvImportService();
+  final NotificationReaderService _notificationService =
+      NotificationReaderService();
 
   List<Account> _accounts = [];
   List<MoneyTransaction> _transactions = [];
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   bool _isLoading = false;
-  bool _isSyncingBank = false;
+
+  // Flag Impostazioni (Punto 2 e Punto 3 facoltativi)
+  bool _enableCsvImport = true;
+  bool _enableNotificationReader = false;
 
   List<Account> get accounts => _accounts;
   List<MoneyTransaction> get allTransactions => _transactions;
@@ -21,17 +27,32 @@ class MoneyProvider extends ChangeNotifier {
       TransactionCategory.defaultCategories;
   DateTime get selectedMonth => _selectedMonth;
   bool get isLoading => _isLoading;
-  bool get isSyncingBank => _isSyncingBank;
+  bool get enableCsvImport => _enableCsvImport;
+  bool get enableNotificationReader => _enableNotificationReader;
 
-  /// Inizializza e carica i dati dal DB SQLite
+  /// Inizializza e carica i dati e i flag delle impostazioni
   Future<void> loadData() async {
     _isLoading = true;
     notifyListeners();
 
     _accounts = await _db.getAllAccounts();
     _transactions = await _db.getAllTransactions();
+    _enableCsvImport = await _db.getEnableCsvImport();
+    _enableNotificationReader = await _db.getEnableNotificationReader();
 
     _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> toggleCsvImport(bool value) async {
+    _enableCsvImport = value;
+    await _db.setEnableCsvImport(value);
+    notifyListeners();
+  }
+
+  Future<void> toggleNotificationReader(bool value) async {
+    _enableNotificationReader = value;
+    await _db.setEnableNotificationReader(value);
     notifyListeners();
   }
 
@@ -89,9 +110,9 @@ class MoneyProvider extends ChangeNotifier {
         balance -= tx.amount;
       } else if (tx.type == TransactionType.transfer) {
         if (tx.accountId == accountId) {
-          balance -= tx.amount; // Uscita dal conto di origine
+          balance -= tx.amount;
         } else if (tx.toAccountId == accountId) {
-          balance += tx.amount; // Entrata nel conto di destinazione
+          balance += tx.amount;
         }
       }
     }
@@ -106,7 +127,7 @@ class MoneyProvider extends ChangeNotifier {
     );
   }
 
-  /// Aggiunge una nuova transazione manuale (Spesa, Entrata o Trasferimento)
+  /// Aggiunge una nuova transazione manuale
   Future<void> addTransaction(MoneyTransaction tx) async {
     await _db.insertTransaction(tx);
     _transactions = await _db.getAllTransactions();
@@ -119,35 +140,45 @@ class MoneyProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Sincronizza i movimenti dal conto bancario (Open Banking PSD2)
-  Future<int> syncBankAccount(String accountId) async {
-    _isSyncingBank = true;
+  /// Punto 2: Importa una lista di movimenti da testo CSV della banca
+  Future<int> importBankCsv({
+    required String csvContent,
+    required String accountId,
+  }) async {
+    final parsedList = _csvService.parseBankCsv(
+      csvContent: csvContent,
+      targetAccountId: accountId,
+    );
+
+    int importedCount = 0;
+    for (final tx in parsedList) {
+      final inserted = await _db.insertTransaction(tx);
+      if (inserted) importedCount++;
+    }
+
+    _transactions = await _db.getAllTransactions();
     notifyListeners();
+    return importedCount;
+  }
 
-    try {
-      final existingExternalIds = _transactions
-          .where((t) => t.externalBankTransactionId != null)
-          .map((t) => t.externalBankTransactionId!)
-          .toSet();
+  /// Punto 3: Elabora una notifica push bancaria / Google Wallet e registra la spesa
+  Future<MoneyTransaction?> processBankNotification({
+    required String notificationText,
+    required String accountId,
+  }) async {
+    if (!_enableNotificationReader) return null;
 
-      final fetched =
-          await _openBankingService.fetchSandboxBankTransactions(accountId);
+    final tx = _notificationService.parseNotificationText(
+      notificationText: notificationText,
+      targetAccountId: accountId,
+    );
 
-      int importedCount = 0;
-      for (final tx in fetched) {
-        if (tx.externalBankTransactionId != null &&
-            !existingExternalIds.contains(tx.externalBankTransactionId)) {
-          await _db.insertTransaction(tx);
-          importedCount++;
-        }
-      }
-
+    if (tx != null) {
+      await _db.insertTransaction(tx);
       _transactions = await _db.getAllTransactions();
-      return importedCount;
-    } finally {
-      _isSyncingBank = false;
       notifyListeners();
     }
+    return tx;
   }
 
   TransactionCategory? getCategoryById(String? categoryId) {

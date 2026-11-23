@@ -1,115 +1,127 @@
-import 'package:path/path.dart';
-import 'package:sqflite/sqflite.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/account.dart';
 import '../models/transaction.dart';
 
+/// Gestisce il salvataggio locale multipiattaforma (Android, iOS, Web Chrome, Windows Desktop)
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
-  static Database? _database;
+
+  static const String _accountsKey = 'mm_accounts_v2';
+  static const String _transactionsKey = 'mm_transactions_v2';
+  static const String _enableCsvKey = 'mm_setting_enable_csv';
+  static const String _enableNotificationsKey = 'mm_setting_enable_notifications';
 
   DatabaseHelper._init();
 
-  Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDB('money_manager.db');
-    return _database!;
+  // --- IMPOSTAZIONI (FLAG FACOLTATIVI) ---
+  Future<bool> getEnableCsvImport() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_enableCsvKey) ?? true; // Attivo di default
   }
 
-  Future<Database> _initDB(String filePath) async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, filePath);
-
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: _createDB,
-    );
+  Future<void> setEnableCsvImport(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_enableCsvKey, value);
   }
 
-  Future<void> _createDB(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE accounts (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        type TEXT NOT NULL,
-        initialBalance REAL NOT NULL,
-        currency TEXT NOT NULL,
-        bankInstitutionId TEXT,
-        externalAccountId TEXT,
-        iban TEXT,
-        lastSyncAt TEXT
-      )
-    ''');
+  Future<bool> getEnableNotificationReader() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_enableNotificationsKey) ?? false; // Facoltativo
+  }
 
-    await db.execute('''
-      CREATE TABLE transactions (
-        id TEXT PRIMARY KEY,
-        amount REAL NOT NULL,
-        date TEXT NOT NULL,
-        type TEXT NOT NULL,
-        accountId TEXT NOT NULL,
-        toAccountId TEXT,
-        categoryId TEXT,
-        note TEXT NOT NULL,
-        merchantName TEXT,
-        isBankSynced INTEGER NOT NULL DEFAULT 0,
-        externalBankTransactionId TEXT UNIQUE,
-        FOREIGN KEY (accountId) REFERENCES accounts (id)
-      )
-    ''');
-
-    // Inseriamo i conti predefiniti in stile Money Manager
-    await db.insert('accounts', Account(
-      id: 'acc_cash',
-      name: 'Contanti',
-      type: AccountType.cash,
-      initialBalance: 120.00,
-    ).toMap());
-
-    await db.insert('accounts', Account(
-      id: 'acc_bank_main',
-      name: 'Conto Corrente Principale',
-      type: AccountType.bankAccount,
-      initialBalance: 1450.00,
-      bankInstitutionId: 'INTESA_SANPAOLO_BCITITMM',
-      iban: 'IT60X0306909606100000123456',
-    ).toMap());
+  Future<void> setEnableNotificationReader(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_enableNotificationsKey, value);
   }
 
   // --- CRUD ACCOUNTS ---
   Future<List<Account>> getAllAccounts() async {
-    final db = await instance.database;
-    final result = await db.query('accounts');
-    return result.map((json) => Account.fromMap(json)).toList();
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_accountsKey);
+
+    if (raw == null || raw.isEmpty) {
+      final seedAccounts = [
+        Account(
+          id: 'acc_cash',
+          name: 'Contanti',
+          type: AccountType.cash,
+          initialBalance: 120.00,
+        ),
+        Account(
+          id: 'acc_bank_main',
+          name: 'Conto Corrente Principale',
+          type: AccountType.bankAccount,
+          initialBalance: 1450.00,
+          iban: 'IT60X0306909606100000123456',
+        ),
+      ];
+      await _saveAccountsList(seedAccounts);
+      return seedAccounts;
+    }
+
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map((item) => Account.fromMap(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> _saveAccountsList(List<Account> accounts) async {
+    final prefs = await SharedPreferences.getInstance();
+    final encoded = jsonEncode(accounts.map((a) => a.toMap()).toList());
+    await prefs.setString(_accountsKey, encoded);
   }
 
   Future<void> insertAccount(Account account) async {
-    final db = await instance.database;
-    await db.insert(
-      'accounts',
-      account.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    final accounts = await getAllAccounts();
+    final index = accounts.indexWhere((a) => a.id == account.id);
+    if (index >= 0) {
+      accounts[index] = account;
+    } else {
+      accounts.add(account);
+    }
+    await _saveAccountsList(accounts);
   }
 
   // --- CRUD TRANSACTIONS ---
   Future<List<MoneyTransaction>> getAllTransactions() async {
-    final db = await instance.database;
-    final result = await db.query('transactions', orderBy: 'date DESC');
-    return result.map((json) => MoneyTransaction.fromMap(json)).toList();
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_transactionsKey);
+    if (raw == null || raw.isEmpty) return [];
+
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    final list = decoded
+        .map((item) => MoneyTransaction.fromMap(item as Map<String, dynamic>))
+        .toList();
+    list.sort((a, b) => b.date.compareTo(a.date));
+    return list;
   }
 
-  Future<void> insertTransaction(MoneyTransaction tx) async {
-    final db = await instance.database;
-    await db.insert(
-      'transactions',
-      tx.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.ignore, // Ignora duplicati bancari
-    );
+  Future<void> _saveTransactionsList(List<MoneyTransaction> transactions) async {
+    final prefs = await SharedPreferences.getInstance();
+    final encoded = jsonEncode(transactions.map((t) => t.toMap()).toList());
+    await prefs.setString(_transactionsKey, encoded);
+  }
+
+  Future<bool> insertTransaction(MoneyTransaction tx) async {
+    final list = await getAllTransactions();
+
+    // Se ha una deduplicationKey (es. riga CSV), controlla che non esista già
+    if (tx.deduplicationKey != null) {
+      final exists =
+          list.any((existing) => existing.deduplicationKey == tx.deduplicationKey);
+      if (exists) return false;
+    }
+
+    list.add(tx);
+    list.sort((a, b) => b.date.compareTo(a.date));
+    await _saveTransactionsList(list);
+    return true;
   }
 
   Future<void> deleteTransaction(String id) async {
-    final db = await instance.database;
-    await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
+    final list = await getAllTransactions();
+    list.removeWhere((t) => t.id == id);
+    await _saveTransactionsList(list);
   }
 }

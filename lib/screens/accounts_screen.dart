@@ -3,9 +3,82 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/account.dart';
 import '../providers/money_provider.dart';
+import '../services/csv_import_service.dart';
 
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
+
+  Future<void> _showCsvImportDialog(
+    BuildContext context,
+    Account account,
+  ) async {
+    final csvController = TextEditingController(
+      text: CsvImportService.sampleBankCsv,
+    );
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('Importa CSV in ${account.name}'),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Incolla le righe del file CSV della tua banca (formato Data;Descrizione;Importo). '
+                  'I movimenti già importati verranno ignorati automaticamente:',
+                  style: TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: csvController,
+                  maxLines: 8,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Contenuto CSV (Data;Descrizione;Importo)',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Annulla'),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                final count = await context.read<MoneyProvider>().importBankCsv(
+                      csvContent: csvController.text,
+                      accountId: account.id,
+                    );
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        count > 0
+                            ? 'Importati e categorizzati $count nuovi movimenti da CSV!'
+                            : 'Nessun nuovo movimento da importare (già presenti).',
+                      ),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.file_download_done),
+              label: const Text('Importa e Categorizza'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,7 +87,7 @@ class AccountsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Conti & Open Banking'),
+        title: const Text('I Miei Conti'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -51,7 +124,7 @@ class AccountsScreen extends StatelessWidget {
           const SizedBox(height: 20),
 
           Text(
-            'I TUOI CONTI',
+            'CONTI ATTIVI',
             style: Theme.of(context).textTheme.labelLarge,
           ),
           const SizedBox(height: 8),
@@ -82,7 +155,7 @@ class AccountsScreen extends StatelessWidget {
                       subtitle: Text(
                         account.iban != null
                             ? 'IBAN: ${account.iban}'
-                            : 'Gestione manuale offline',
+                            : 'Gestione contanti',
                       ),
                       trailing: Text(
                         currencyFormat.format(balance),
@@ -92,51 +165,32 @@ class AccountsScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (isBank) ...[
+
+                    // Mostra il pulsante Importa CSV solo se il flag in Impostazioni è attivo
+                    if (isBank && provider.enableCsvImport) ...[
                       const Divider(),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Row(
                             children: [
-                              Icon(Icons.verified_user_outlined,
-                                  size: 16, color: Colors.green),
+                              Icon(
+                                Icons.table_chart_outlined,
+                                size: 16,
+                                color: Colors.teal,
+                              ),
                               SizedBox(width: 6),
                               Text(
-                                'Open Banking PSD2 (GoCardless)',
+                                'Importazione rapida CSV / Excel',
                                 style: TextStyle(fontSize: 12),
                               ),
                             ],
                           ),
                           FilledButton.tonalIcon(
-                            onPressed: provider.isSyncingBank
-                                ? null
-                                : () async {
-                                    final count = await provider
-                                        .syncBankAccount(account.id);
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            count > 0
-                                                ? 'Importati e categorizzati $count nuovi movimenti bancari!'
-                                                : 'Tutti i movimenti bancari sono già sincronizzati.',
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  },
-                            icon: provider.isSyncingBank
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.sync, size: 18),
-                            label: const Text('Sincronizza'),
+                            onPressed: () =>
+                                _showCsvImportDialog(context, account),
+                            icon: const Icon(Icons.upload_file, size: 18),
+                            label: const Text('Importa CSV'),
                           ),
                         ],
                       ),

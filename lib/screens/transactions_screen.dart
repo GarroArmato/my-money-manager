@@ -73,7 +73,7 @@ class TransactionsScreen extends StatelessWidget {
             child: provider.monthlyTransactions.isEmpty
                 ? const Center(
                     child: Text(
-                      'Nessun movimento in questo mese.\nPremi "+ Movimento" o sincronizza la tua banca!',
+                      'Nessun movimento in questo mese.\nPremi "+ Movimento" o importa un CSV dai Conti!',
                       textAlign: TextAlign.center,
                     ),
                   )
@@ -170,32 +170,8 @@ class _TransactionTile extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
-          if (transaction.isBankSynced)
-            Tooltip(
-              message: 'Sincronizzato via Open Banking PSD2',
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.sync, size: 12, color: Colors.blue),
-                    SizedBox(width: 3),
-                    Text(
-                      'PSD2',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          if (transaction.source != TransactionSource.manual)
+            _SourceBadge(source: transaction.source),
         ],
       ),
       subtitle: Text(
@@ -210,6 +186,43 @@ class _TransactionTile extends StatelessWidget {
           fontSize: 15,
           color: amountColor,
         ),
+      ),
+    );
+  }
+}
+
+class _SourceBadge extends StatelessWidget {
+  final TransactionSource source;
+
+  const _SourceBadge({required this.source});
+
+  @override
+  Widget build(BuildContext context) {
+    final isCsv = source == TransactionSource.csv;
+    final color = isCsv ? Colors.teal : Colors.deepOrange;
+    final label = isCsv ? 'CSV' : 'NOTIFICA';
+    final icon = isCsv ? Icons.table_chart_outlined : Icons.notifications_active;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
