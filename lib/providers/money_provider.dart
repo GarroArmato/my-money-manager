@@ -13,6 +13,7 @@ class MoneyProvider extends ChangeNotifier {
       NotificationReaderService();
 
   List<Account> _accounts = [];
+  List<TransactionCategory> _categories = [];
   List<MoneyTransaction> _transactions = [];
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   bool _isLoading = false;
@@ -22,20 +23,24 @@ class MoneyProvider extends ChangeNotifier {
   bool _enableNotificationReader = false;
 
   List<Account> get accounts => _accounts;
+  List<TransactionCategory> get categories => _categories;
+  List<TransactionCategory> get expenseCategories =>
+      _categories.where((c) => c.kind == CategoryKind.expense).toList();
+  List<TransactionCategory> get incomeCategories =>
+      _categories.where((c) => c.kind == CategoryKind.income).toList();
   List<MoneyTransaction> get allTransactions => _transactions;
-  List<TransactionCategory> get categories =>
-      TransactionCategory.defaultCategories;
   DateTime get selectedMonth => _selectedMonth;
   bool get isLoading => _isLoading;
   bool get enableCsvImport => _enableCsvImport;
   bool get enableNotificationReader => _enableNotificationReader;
 
-  /// Inizializza e carica i dati e i flag delle impostazioni
+  /// Inizializza e carica conti, categorie, movimenti e impostazioni
   Future<void> loadData() async {
     _isLoading = true;
     notifyListeners();
 
     _accounts = await _db.getAllAccounts();
+    _categories = await _db.getAllCategories();
     _transactions = await _db.getAllTransactions();
     _enableCsvImport = await _db.getEnableCsvImport();
     _enableNotificationReader = await _db.getEnableNotificationReader();
@@ -53,6 +58,33 @@ class MoneyProvider extends ChangeNotifier {
   Future<void> toggleNotificationReader(bool value) async {
     _enableNotificationReader = value;
     await _db.setEnableNotificationReader(value);
+    notifyListeners();
+  }
+
+  // --- GESTIONE CONTI (ACCOUNTS) ---
+  Future<void> saveAccount(Account account) async {
+    await _db.upsertAccount(account);
+    _accounts = await _db.getAllAccounts();
+    notifyListeners();
+  }
+
+  Future<void> deleteAccount(String accountId) async {
+    await _db.deleteAccount(accountId);
+    _accounts = await _db.getAllAccounts();
+    _transactions = await _db.getAllTransactions();
+    notifyListeners();
+  }
+
+  // --- GESTIONE CATEGORIE (ENTRATE E USCITE) ---
+  Future<void> saveCategory(TransactionCategory category) async {
+    await _db.upsertCategory(category);
+    _categories = await _db.getAllCategories();
+    notifyListeners();
+  }
+
+  Future<void> deleteCategory(String categoryId) async {
+    await _db.deleteCategory(categoryId);
+    _categories = await _db.getAllCategories();
     notifyListeners();
   }
 
@@ -89,7 +121,7 @@ class MoneyProvider extends ChangeNotifier {
   /// Bilancio netto del mese selezionato
   double get monthlyBalance => monthlyIncome - monthlyExpenses;
 
-  /// Calcola il saldo attuale di un singolo conto (Contanti, Banca, ecc.)
+  /// Calcola il saldo attuale di un singolo conto (Contanti, Banca, Carte, Risparmi)
   double getAccountBalance(String accountId) {
     final account = _accounts.firstWhere(
       (a) => a.id == accountId,
@@ -119,7 +151,23 @@ class MoneyProvider extends ChangeNotifier {
     return balance;
   }
 
-  /// Patrimonio totale (somma di tutti i conti)
+  /// Totale Attività (conti con saldo positivo, stile Money Manager)
+  double get totalAssets {
+    return _accounts.fold(0.0, (sum, acc) {
+      final bal = getAccountBalance(acc.id);
+      return bal > 0 ? sum + bal : sum;
+    });
+  }
+
+  /// Totale Passività / Debiti (conti con saldo negativo, stile Money Manager)
+  double get totalLiabilities {
+    return _accounts.fold(0.0, (sum, acc) {
+      final bal = getAccountBalance(acc.id);
+      return bal < 0 ? sum + bal.abs() : sum;
+    });
+  }
+
+  /// Patrimonio totale netto (Attività - Passività)
   double get totalNetWorth {
     return _accounts.fold(
       0.0,
@@ -184,7 +232,7 @@ class MoneyProvider extends ChangeNotifier {
   TransactionCategory? getCategoryById(String? categoryId) {
     if (categoryId == null) return null;
     try {
-      return categories.firstWhere((c) => c.id == categoryId);
+      return _categories.firstWhere((c) => c.id == categoryId);
     } catch (_) {
       return null;
     }

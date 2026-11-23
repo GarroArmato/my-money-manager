@@ -1,7 +1,8 @@
 import '../models/account.dart';
+import '../models/category.dart';
 import '../models/transaction.dart';
 
-/// Gestisce lo storage locale multipiattaforma (Android, iOS, Web Chrome, Windows Desktop)
+/// Gestisce lo storage locale multipiattaforma per Conti, Categorie, Movimenti e Impostazioni
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
 
@@ -11,7 +12,7 @@ class DatabaseHelper {
   final List<Account> _accounts = [
     Account(
       id: 'acc_cash',
-      name: 'Contanti',
+      name: 'Portafoglio Contanti',
       type: AccountType.cash,
       initialBalance: 120.00,
     ),
@@ -22,7 +23,23 @@ class DatabaseHelper {
       initialBalance: 1450.00,
       iban: 'IT60X0306909606100000123456',
     ),
+    Account(
+      id: 'acc_card_revolut',
+      name: 'Carta Revolut / Prepagata',
+      type: AccountType.creditCard,
+      initialBalance: 250.00,
+    ),
+    Account(
+      id: 'acc_savings',
+      name: 'Salvadanaio Risparmi',
+      type: AccountType.savings,
+      initialBalance: 3000.00,
+    ),
   ];
+
+  final List<TransactionCategory> _categories = List<TransactionCategory>.from(
+    TransactionCategory.defaultCategories,
+  );
 
   final List<MoneyTransaction> _transactions = [];
 
@@ -41,12 +58,12 @@ class DatabaseHelper {
     _enableNotificationReader = value;
   }
 
-  // --- CRUD ACCOUNTS ---
+  // --- CRUD ACCOUNTS (CONTI) ---
   Future<List<Account>> getAllAccounts() async {
     return List<Account>.unmodifiable(_accounts);
   }
 
-  Future<void> insertAccount(Account account) async {
+  Future<void> upsertAccount(Account account) async {
     final index = _accounts.indexWhere((a) => a.id == account.id);
     if (index >= 0) {
       _accounts[index] = account;
@@ -55,7 +72,33 @@ class DatabaseHelper {
     }
   }
 
-  // --- CRUD TRANSACTIONS ---
+  Future<void> deleteAccount(String accountId) async {
+    if (_accounts.length <= 1) return; // Mantiene almeno un conto attivo
+    _accounts.removeWhere((a) => a.id == accountId);
+    _transactions.removeWhere(
+      (t) => t.accountId == accountId || t.toAccountId == accountId,
+    );
+  }
+
+  // --- CRUD CATEGORIES (CATEGORIE ENTRATA E USCITA) ---
+  Future<List<TransactionCategory>> getAllCategories() async {
+    return List<TransactionCategory>.unmodifiable(_categories);
+  }
+
+  Future<void> upsertCategory(TransactionCategory category) async {
+    final index = _categories.indexWhere((c) => c.id == category.id);
+    if (index >= 0) {
+      _categories[index] = category;
+    } else {
+      _categories.add(category);
+    }
+  }
+
+  Future<void> deleteCategory(String categoryId) async {
+    _categories.removeWhere((c) => c.id == categoryId);
+  }
+
+  // --- CRUD TRANSACTIONS (MOVIMENTI) ---
   Future<List<MoneyTransaction>> getAllTransactions() async {
     final sorted = List<MoneyTransaction>.from(_transactions)
       ..sort((a, b) => b.date.compareTo(a.date));

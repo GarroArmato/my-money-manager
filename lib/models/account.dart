@@ -1,8 +1,38 @@
+import 'package:flutter/material.dart';
+
 enum AccountType {
   cash,        // Contanti
-  bankAccount, // Conto Corrente Bancario
-  creditCard,  // Carta di Credito / Debito
-  savings,     // Risparmi / Salvadanaio
+  bankAccount, // Conti Bancari
+  creditCard,  // Carte (Debito / Credito / Prepagate)
+  savings,     // Risparmi & Investimenti
+}
+
+extension AccountTypeExtension on AccountType {
+  String get label {
+    switch (this) {
+      case AccountType.cash:
+        return 'Contanti';
+      case AccountType.bankAccount:
+        return 'Conti Bancari';
+      case AccountType.creditCard:
+        return 'Carte';
+      case AccountType.savings:
+        return 'Risparmi & Investimenti';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case AccountType.cash:
+        return Icons.payments_outlined;
+      case AccountType.bankAccount:
+        return Icons.account_balance_outlined;
+      case AccountType.creditCard:
+        return Icons.credit_card_outlined;
+      case AccountType.savings:
+        return Icons.savings_outlined;
+    }
+  }
 }
 
 class Account {

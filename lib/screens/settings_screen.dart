@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/account.dart';
+import '../models/category.dart';
 import '../services/notification_reader_service.dart';
 import '../utils/money_scope.dart';
+import 'accounts_screen.dart';
+import 'categories_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -31,11 +34,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Impostazioni & Automazioni'),
+        title: const Text('Impostazioni'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
         children: [
+          // Sezione Categorie & Conti in stile Money Manager
+          Text(
+            'CATEGORIE E CONTI',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.red.withValues(alpha: 0.15),
+                    child: Icon(Icons.arrow_upward, color: Colors.red.shade700),
+                  ),
+                  title: const Text(
+                    'Categorie Uscite',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text(
+                    '${provider.expenseCategories.length} categorie attive (aggiungi, modifica, elimina)',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const CategoriesScreen(
+                          initialKind: CategoryKind.expense,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.green.withValues(alpha: 0.15),
+                    child: Icon(Icons.arrow_downward,
+                        color: Colors.green.shade700),
+                  ),
+                  title: const Text(
+                    'Categorie Entrate',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text(
+                    '${provider.incomeCategories.length} categorie attive (aggiungi, modifica, elimina)',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const CategoriesScreen(
+                          initialKind: CategoryKind.income,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const CircleAvatar(
+                    child: Icon(Icons.account_balance_wallet_outlined),
+                  ),
+                  title: const Text(
+                    'Crea Nuovo Conto',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    'Aggiungi un nuovo conto in Contanti, Conti Bancari, Carte o Risparmi',
+                  ),
+                  trailing: const Icon(Icons.add),
+                  onTap: () => showAccountEditorDialog(context),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
           Text(
             'COLLEGAMENTO BANCA (FACOLTATIVO)',
             style: Theme.of(context).textTheme.labelLarge,
@@ -53,7 +133,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               subtitle: const Text(
-                'Mostra nei conti bancari il pulsante per importare e categorizzare i file CSV scaricati dall\'home banking.',
+                'Mostra nei conti bancari e carte il pulsante per importare e categorizzare i file CSV scaricati dall\'home banking.',
               ),
               value: provider.enableCsvImport,
               onChanged: (val) => provider.toggleCsvImport(val),

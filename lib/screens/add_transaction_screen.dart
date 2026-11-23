@@ -4,6 +4,8 @@ import '../models/transaction.dart';
 import '../providers/money_provider.dart';
 import '../utils/formatters.dart';
 import '../utils/money_scope.dart';
+import 'accounts_screen.dart';
+import 'categories_screen.dart';
 
 class AddTransactionScreen extends StatefulWidget {
   const AddTransactionScreen({super.key});
@@ -18,6 +20,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final _noteController = TextEditingController();
 
   TransactionType _selectedType = TransactionType.expense;
+  DateTime _selectedDate = DateTime.now();
   String? _selectedAccountId;
   String? _selectedToAccountId;
   String? _selectedCategoryId;
@@ -40,14 +43,15 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   void _resetCategorySelection(MoneyProvider provider) {
-    final matching = provider.categories.where((c) {
-      return _selectedType == TransactionType.income
-          ? c.kind == CategoryKind.income
-          : c.kind == CategoryKind.expense;
-    }).toList();
+    final matching = _selectedType == TransactionType.income
+        ? provider.incomeCategories
+        : provider.expenseCategories;
 
     if (matching.isNotEmpty) {
-      _selectedCategoryId = matching.first.id;
+      if (_selectedCategoryId == null ||
+          !matching.any((c) => c.id == _selectedCategoryId)) {
+        _selectedCategoryId = matching.first.id;
+      }
     }
   }
 
@@ -58,6 +62,26 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     super.dispose();
   }
 
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDate = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          _selectedDate.hour,
+          _selectedDate.minute,
+        );
+      });
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedAccountId == null) return;
@@ -66,9 +90,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final amount = double.parse(rawAmount);
 
     final tx = MoneyTransaction(
-      id: AppFormatters.generateId(),
+      id: AppFormatters.generateId('tx'),
       amount: amount,
-      date: DateTime.now(),
+      date: _selectedDate,
       type: _selectedType,
       accountId: _selectedAccountId!,
       toAccountId: _selectedType == TransactionType.transfer
@@ -87,11 +111,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = MoneyScope.of(context);
-    final availableCategories = provider.categories.where((c) {
-      return _selectedType == TransactionType.income
-          ? c.kind == CategoryKind.income
-          : c.kind == CategoryKind.expense;
-    }).toList();
+    final currentKind = _selectedType == TransactionType.income
+        ? CategoryKind.income
+        : CategoryKind.expense;
+    final availableCategories = currentKind == CategoryKind.income
+        ? provider.incomeCategories
+        : provider.expenseCategories;
+
+    // Assicura che l'ID selezionato sia valido se una categoria o conto viene eliminato
+    if (availableCategories.isNotEmpty &&
+        !availableCategories.any((c) => c.id == _selectedCategoryId)) {
+      _selectedCategoryId = availableCategories.first.id;
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -102,7 +133,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Selettore Tipo (Uscita / Entrata / Trasferimento) in stile Money Manager
+            // 1. Selettore Tipo (Uscita / Entrata / Trasferimento) in stile Money Manager
             SegmentedButton<TransactionType>(
               segments: const [
                 ButtonSegment(
@@ -129,13 +160,66 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 });
               },
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
-            // Importo
+            // 2. Riga Data (con frecce giorno prima/dopo e calendario in stile Money Manager)
+            InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Data',
+                prefixIcon: Icon(Icons.calendar_today_outlined),
+                border: OutlineInputBorder(),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: _pickDate,
+                    child: Text(
+                      '${AppFormatters.formatShortWeekday(_selectedDate)} ${AppFormatters.formatDate(_selectedDate)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Giorno precedente',
+                        icon: const Icon(Icons.chevron_left),
+                        onPressed: () {
+                          setState(() {
+                            _selectedDate = _selectedDate
+                                .subtract(const Duration(days: 1));
+                          });
+                        },
+                      ),
+                      IconButton(
+                        tooltip: 'Giorno successivo',
+                        icon: const Icon(Icons.chevron_right),
+                        onPressed: () {
+                          setState(() {
+                            _selectedDate =
+                                _selectedDate.add(const Duration(days: 1));
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // 3. Importo
             TextFormField(
               controller: _amountController,
+              autofocus: true,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               decoration: const InputDecoration(
                 labelText: 'Importo (€)',
                 prefixIcon: Icon(Icons.euro),
@@ -154,32 +238,52 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Conto di origine
-            DropdownButtonFormField<String>(
-              value: _selectedAccountId,
-              decoration: InputDecoration(
-                labelText: _selectedType == TransactionType.transfer
-                    ? 'Dal Conto'
-                    : 'Conto',
-                prefixIcon: const Icon(Icons.account_balance_wallet),
-                border: const OutlineInputBorder(),
-              ),
-              items: provider.accounts
-                  .map((a) => DropdownMenuItem(
-                        value: a.id,
-                        child: Text(a.name),
-                      ))
-                  .toList(),
-              onChanged: (val) => setState(() => _selectedAccountId = val),
+            // 4. Scelta Conto + pulsante rapido "+ Nuovo Conto"
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedAccountId,
+                    decoration: InputDecoration(
+                      labelText: _selectedType == TransactionType.transfer
+                          ? 'Dal Conto (Origine)'
+                          : 'Conto',
+                      prefixIcon: const Icon(Icons.account_balance_wallet),
+                      border: const OutlineInputBorder(),
+                    ),
+                    items: provider.accounts
+                        .map((a) => DropdownMenuItem(
+                              value: a.id,
+                              child: Text(a.name),
+                            ))
+                        .toList(),
+                    onChanged: (val) =>
+                        setState(() => _selectedAccountId = val),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  tooltip: 'Crea Nuovo Conto',
+                  onPressed: () async {
+                    final created = await showAccountEditorDialog(context);
+                    if (created != null) {
+                      setState(() {
+                        _selectedAccountId = created.id;
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.add),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
 
-            // Se è un trasferimento mostra "Al Conto", altrimenti mostra la Categoria
+            // 5. Se è un Trasferimento mostra "Al Conto", altrimenti mostra la Griglia Categorie in stile Money Manager
             if (_selectedType == TransactionType.transfer)
               DropdownButtonFormField<String>(
                 value: _selectedToAccountId,
                 decoration: const InputDecoration(
-                  labelText: 'Al Conto',
+                  labelText: 'Al Conto (Destinazione)',
                   prefixIcon: Icon(Icons.account_balance),
                   border: OutlineInputBorder(),
                 ),
@@ -189,33 +293,90 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                           child: Text(a.name),
                         ))
                     .toList(),
-                onChanged: (val) => setState(() => _selectedToAccountId = val),
+                onChanged: (val) =>
+                    setState(() => _selectedToAccountId = val),
               )
-            else
-              DropdownButtonFormField<String>(
-                value: _selectedCategoryId,
-                decoration: const InputDecoration(
-                  labelText: 'Categoria',
-                  prefixIcon: Icon(Icons.category),
-                  border: OutlineInputBorder(),
-                ),
-                items: availableCategories
-                    .map((c) => DropdownMenuItem(
-                          value: c.id,
-                          child: Row(
-                            children: [
-                              Icon(c.icon, color: c.color, size: 20),
-                              const SizedBox(width: 8),
-                              Text(c.name),
-                            ],
+            else ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _selectedType == TransactionType.income
+                        ? 'CATEGORIA ENTRATA'
+                        : 'CATEGORIA USCITA',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => CategoriesScreen(
+                            initialKind: currentKind,
                           ),
-                        ))
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedCategoryId = val),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.edit_note, size: 18),
+                    label: const Text('Modifica / Gestisci'),
+                  ),
+                ],
               ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 6),
+              // Griglia visuale delle categorie + pulsante "+ Nuova Categoria"
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ...availableCategories.map((cat) {
+                    final isSelected = cat.id == _selectedCategoryId;
+                    return ChoiceChip(
+                      avatar: Icon(
+                        cat.icon,
+                        size: 18,
+                        color: isSelected ? Colors.white : cat.color,
+                      ),
+                      label: Text(cat.name),
+                      selected: isSelected,
+                      selectedColor: cat.color,
+                      labelStyle: TextStyle(
+                        color: isSelected ? Colors.white : null,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                      showCheckmark: false,
+                      onSelected: (_) {
+                        setState(() {
+                          _selectedCategoryId = cat.id;
+                        });
+                      },
+                    );
+                  }),
+                  ActionChip(
+                    avatar: const Icon(Icons.add_circle_outline, size: 18),
+                    label: const Text('+ Nuova Categoria'),
+                    onPressed: () async {
+                      final created = await showCategoryEditorDialog(
+                        context,
+                        initialKind: currentKind,
+                      );
+                      if (created != null) {
+                        setState(() {
+                          if (created.kind == CategoryKind.income) {
+                            _selectedType = TransactionType.income;
+                          } else {
+                            _selectedType = TransactionType.expense;
+                          }
+                          _selectedCategoryId = created.id;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 18),
 
-            // Nota / Descrizione
+            // 6. Nota / Descrizione
             TextFormField(
               controller: _noteController,
               decoration: const InputDecoration(
@@ -224,7 +385,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
 
             FilledButton.icon(
               onPressed: _submit,
