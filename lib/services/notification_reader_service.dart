@@ -1,10 +1,8 @@
-import 'package:uuid/uuid.dart';
 import '../models/transaction.dart';
+import '../utils/formatters.dart';
 import 'smart_categorizer.dart';
 
 class NotificationReaderService {
-  static const _uuid = Uuid();
-
   /// Esempi realistici di notifiche push inviate da app bancarie italiane e Google Wallet
   static const List<String> sampleBankNotifications = [
     'Intesa Sanpaolo: Hai effettuato un pagamento POS di 18,50 € presso PIZZERIA DA MICHELE',
@@ -28,7 +26,6 @@ class NotificationReaderService {
         upper.contains('STIPENDIO') ||
         upper.contains('RIMBORSO');
 
-    // Regex per trovare importi come "18,50 €", "EUR 64,20", "1.850,00 €", "40.00"
     final amountRegex = RegExp(
       r'(?:(?:EUR|€)\s*(\d+(?:[.,]\d{1,2})?))|(?:(\d+(?:\.\d{3})*(?:[.,]\d{1,2}))\s*(?:EUR|€))',
       caseSensitive: false,
@@ -44,7 +41,6 @@ class NotificationReaderService {
     final amount = double.tryParse(rawNumber);
     if (amount == null || amount <= 0) return null;
 
-    // Estrae l'esercente dopo "presso " o "-" se presente
     String merchantOrNote = text;
     final pressoMatch =
         RegExp(r'presso\s+(.+)$', caseSensitive: false).firstMatch(text);
@@ -53,7 +49,7 @@ class NotificationReaderService {
     }
 
     return MoneyTransaction(
-      id: _uuid.v4(),
+      id: AppFormatters.generateId(),
       amount: amount,
       date: DateTime.now(),
       type: isIncome ? TransactionType.income : TransactionType.expense,

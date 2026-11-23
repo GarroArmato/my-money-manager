@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../models/account.dart';
-import '../providers/money_provider.dart';
 import '../services/notification_reader_service.dart';
+import '../utils/money_scope.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -24,7 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<MoneyProvider>();
+    final provider = MoneyScope.of(context);
     final bankAccount = provider.accounts.firstWhere(
       (a) => a.type == AccountType.bankAccount,
       orElse: () => provider.accounts.first,

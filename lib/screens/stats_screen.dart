@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import '../models/transaction.dart';
-import '../providers/money_provider.dart';
+import '../utils/formatters.dart';
+import '../utils/money_scope.dart';
 
 class StatsScreen extends StatelessWidget {
   const StatsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<MoneyProvider>();
-    final currencyFormat = NumberFormat.currency(locale: 'it_IT', symbol: '€');
+    final provider = MoneyScope.of(context);
     final totalExpenses = provider.monthlyExpenses;
 
     // Raggruppa le uscite del mese per categoria
@@ -72,7 +70,7 @@ class StatsScreen extends StatelessWidget {
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              currencyFormat.format(entry.value),
+                              AppFormatters.formatCurrency(entry.value),
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                               ),

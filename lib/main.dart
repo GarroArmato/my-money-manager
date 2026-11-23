@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:intl/date_symbol_data_local.dart';
-import 'package:provider/provider.dart';
 import 'providers/money_provider.dart';
 import 'screens/main_navigation_screen.dart';
+import 'utils/money_scope.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('it_IT', null);
+  final provider = MoneyProvider()..loadData();
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => MoneyProvider()..loadData(),
+    MoneyScope(
+      provider: provider,
       child: const MyMoneyManagerApp(),
     ),
   );

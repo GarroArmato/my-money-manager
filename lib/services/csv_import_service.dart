@@ -1,10 +1,8 @@
-import 'package:uuid/uuid.dart';
 import '../models/transaction.dart';
+import '../utils/formatters.dart';
 import 'smart_categorizer.dart';
 
 class CsvImportService {
-  static const _uuid = Uuid();
-
   /// Esempio di tracciato CSV esportato da una banca italiana (Data;Descrizione;Importo)
   static String get sampleBankCsv {
     final now = DateTime.now();
@@ -33,14 +31,12 @@ ${fmt(now.subtract(const Duration(days: 5)))};BONIFICO ACCREDITO STIPENDIO;1850,
     final List<MoneyTransaction> parsed = [];
 
     for (final line in lines) {
-      // Ignora eventuale riga di intestazione
       if (line.toLowerCase().startsWith('data;') ||
           line.toLowerCase().startsWith('data,') ||
           line.toLowerCase().startsWith('date')) {
         continue;
       }
 
-      // Supporta sia ';' (standard CSV italiano) sia ','
       final parts = line.contains(';') ? line.split(';') : line.split(',');
       if (parts.length < 3) continue;
 
@@ -51,7 +47,7 @@ ${fmt(now.subtract(const Duration(days: 5)))};BONIFICO ACCREDITO STIPENDIO;1850,
           .replaceAll('€', '')
           .replaceAll('EUR', '')
           .replaceAll(' ', '')
-          .replaceAll('.', '') // Rimuove eventuale separatore migliaia (es. 1.850,00)
+          .replaceAll('.', '')
           .replaceAll(',', '.');
 
       final signedAmount = double.tryParse(rawAmount);
@@ -66,7 +62,7 @@ ${fmt(now.subtract(const Duration(days: 5)))};BONIFICO ACCREDITO STIPENDIO;1850,
 
       parsed.add(
         MoneyTransaction(
-          id: _uuid.v4(),
+          id: AppFormatters.generateId(),
           amount: absAmount,
           date: date,
           type: isIncome ? TransactionType.income : TransactionType.expense,
@@ -83,7 +79,6 @@ ${fmt(now.subtract(const Duration(days: 5)))};BONIFICO ACCREDITO STIPENDIO;1850,
   }
 
   DateTime _parseItalianOrIsoDate(String raw) {
-    // Formato DD/MM/YYYY
     if (raw.contains('/')) {
       final segments = raw.split('/');
       if (segments.length == 3) {

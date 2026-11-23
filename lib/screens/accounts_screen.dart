@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import '../models/account.dart';
-import '../providers/money_provider.dart';
 import '../services/csv_import_service.dart';
+import '../utils/formatters.dart';
+import '../utils/money_scope.dart';
 
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
@@ -52,10 +51,10 @@ class AccountsScreen extends StatelessWidget {
             ),
             FilledButton.icon(
               onPressed: () async {
-                final count = await context.read<MoneyProvider>().importBankCsv(
-                      csvContent: csvController.text,
-                      accountId: account.id,
-                    );
+                final count = await MoneyScope.read(context).importBankCsv(
+                  csvContent: csvController.text,
+                  accountId: account.id,
+                );
                 if (dialogContext.mounted) {
                   Navigator.of(dialogContext).pop();
                 }
@@ -82,8 +81,7 @@ class AccountsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<MoneyProvider>();
-    final currencyFormat = NumberFormat.currency(locale: 'it_IT', symbol: '€');
+    final provider = MoneyScope.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -110,7 +108,7 @@ class AccountsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    currencyFormat.format(provider.totalNetWorth),
+                    AppFormatters.formatCurrency(provider.totalNetWorth),
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -158,7 +156,7 @@ class AccountsScreen extends StatelessWidget {
                             : 'Gestione contanti',
                       ),
                       trailing: Text(
-                        currencyFormat.format(balance),
+                        AppFormatters.formatCurrency(balance),
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,

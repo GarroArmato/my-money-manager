@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import '../models/transaction.dart';
-import '../providers/money_provider.dart';
+import '../utils/formatters.dart';
+import '../utils/money_scope.dart';
 
 class TransactionsScreen extends StatelessWidget {
   const TransactionsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<MoneyProvider>();
-    final currencyFormat = NumberFormat.currency(locale: 'it_IT', symbol: '€');
-    final monthFormat = DateFormat('MMMM yyyy', 'it_IT');
+    final provider = MoneyScope.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -25,7 +22,7 @@ class TransactionsScreen extends StatelessWidget {
           ),
           Center(
             child: Text(
-              monthFormat.format(provider.selectedMonth).toUpperCase(),
+              AppFormatters.formatMonthYear(provider.selectedMonth),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),
@@ -51,17 +48,17 @@ class TransactionsScreen extends StatelessWidget {
               children: [
                 _SummaryColumn(
                   label: 'Entrate',
-                  amount: currencyFormat.format(provider.monthlyIncome),
+                  amount: AppFormatters.formatCurrency(provider.monthlyIncome),
                   color: Colors.green.shade700,
                 ),
                 _SummaryColumn(
                   label: 'Uscite',
-                  amount: currencyFormat.format(provider.monthlyExpenses),
+                  amount: AppFormatters.formatCurrency(provider.monthlyExpenses),
                   color: Colors.red.shade700,
                 ),
                 _SummaryColumn(
                   label: 'Bilancio',
-                  amount: currencyFormat.format(provider.monthlyBalance),
+                  amount: AppFormatters.formatCurrency(provider.monthlyBalance),
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
               ],
@@ -133,11 +130,9 @@ class _TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.read<MoneyProvider>();
+    final provider = MoneyScope.read(context);
     final category = provider.getCategoryById(transaction.categoryId);
     final account = provider.getAccountById(transaction.accountId);
-    final currencyFormat = NumberFormat.currency(locale: 'it_IT', symbol: '€');
-    final dateFormat = DateFormat('dd/MM HH:mm');
 
     final isExpense = transaction.type == TransactionType.expense;
     final isTransfer = transaction.type == TransactionType.transfer;
@@ -175,12 +170,12 @@ class _TransactionTile extends StatelessWidget {
         ],
       ),
       subtitle: Text(
-        '${account?.name ?? ''} • ${dateFormat.format(transaction.date)}'
+        '${account?.name ?? ''} • ${AppFormatters.formatShortDateTime(transaction.date)}'
         '${transaction.note.isNotEmpty ? '\n${transaction.note}' : ''}',
       ),
       isThreeLine: transaction.note.isNotEmpty,
       trailing: Text(
-        '$prefix${currencyFormat.format(transaction.amount)}',
+        '$prefix${AppFormatters.formatCurrency(transaction.amount)}',
         style: TextStyle(
           fontWeight: FontWeight.bold,
           fontSize: 15,

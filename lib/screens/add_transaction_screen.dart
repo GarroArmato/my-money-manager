@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:uuid/uuid.dart';
 import '../models/category.dart';
 import '../models/transaction.dart';
 import '../providers/money_provider.dart';
+import '../utils/formatters.dart';
+import '../utils/money_scope.dart';
 
 class AddTransactionScreen extends StatefulWidget {
   const AddTransactionScreen({super.key});
@@ -13,7 +13,6 @@ class AddTransactionScreen extends StatefulWidget {
 }
 
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
-  static const _uuid = Uuid();
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
@@ -22,18 +21,22 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   String? _selectedAccountId;
   String? _selectedToAccountId;
   String? _selectedCategoryId;
+  bool _initialized = false;
 
   @override
-  void initState() {
-    super.initState();
-    final provider = context.read<MoneyProvider>();
-    if (provider.accounts.isNotEmpty) {
-      _selectedAccountId = provider.accounts.first.id;
-      if (provider.accounts.length > 1) {
-        _selectedToAccountId = provider.accounts[1].id;
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      final provider = MoneyScope.read(context);
+      if (provider.accounts.isNotEmpty) {
+        _selectedAccountId = provider.accounts.first.id;
+        if (provider.accounts.length > 1) {
+          _selectedToAccountId = provider.accounts[1].id;
+        }
       }
+      _resetCategorySelection(provider);
+      _initialized = true;
     }
-    _resetCategorySelection(provider);
   }
 
   void _resetCategorySelection(MoneyProvider provider) {
@@ -63,7 +66,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final amount = double.parse(rawAmount);
 
     final tx = MoneyTransaction(
-      id: _uuid.v4(),
+      id: AppFormatters.generateId(),
       amount: amount,
       date: DateTime.now(),
       type: _selectedType,
@@ -77,13 +80,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       note: _noteController.text.trim(),
     );
 
-    await context.read<MoneyProvider>().addTransaction(tx);
+    await MoneyScope.read(context).addTransaction(tx);
     if (mounted) Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<MoneyProvider>();
+    final provider = MoneyScope.of(context);
     final availableCategories = provider.categories.where((c) {
       return _selectedType == TransactionType.income
           ? c.kind == CategoryKind.income
