@@ -12,6 +12,7 @@ class MoneyProvider extends ChangeNotifier {
   final NotificationReaderService _notificationService =
       NotificationReaderService();
 
+  List<AccountGroup> _accountGroups = [];
   List<Account> _accounts = [];
   List<TransactionCategory> _categories = [];
   List<MoneyTransaction> _transactions = [];
@@ -22,6 +23,7 @@ class MoneyProvider extends ChangeNotifier {
   bool _enableCsvImport = true;
   bool _enableNotificationReader = false;
 
+  List<AccountGroup> get accountGroups => _accountGroups;
   List<Account> get accounts => _accounts;
   List<TransactionCategory> get categories => _categories;
   List<TransactionCategory> get expenseCategories =>
@@ -34,11 +36,12 @@ class MoneyProvider extends ChangeNotifier {
   bool get enableCsvImport => _enableCsvImport;
   bool get enableNotificationReader => _enableNotificationReader;
 
-  /// Inizializza e carica conti, categorie, movimenti e impostazioni
+  /// Inizializza e carica gruppi di conti, conti, categorie, movimenti e impostazioni
   Future<void> loadData() async {
     _isLoading = true;
     notifyListeners();
 
+    _accountGroups = await _db.getAllAccountGroups();
     _accounts = await _db.getAllAccounts();
     _categories = await _db.getAllCategories();
     _transactions = await _db.getAllTransactions();
@@ -58,6 +61,20 @@ class MoneyProvider extends ChangeNotifier {
   Future<void> toggleNotificationReader(bool value) async {
     _enableNotificationReader = value;
     await _db.setEnableNotificationReader(value);
+    notifyListeners();
+  }
+
+  // --- GESTIONE GRUPPI DI CONTI (ACCOUNT GROUPS) ---
+  Future<void> saveAccountGroup(AccountGroup group) async {
+    await _db.upsertAccountGroup(group);
+    _accountGroups = await _db.getAllAccountGroups();
+    notifyListeners();
+  }
+
+  Future<void> deleteAccountGroup(String groupId) async {
+    await _db.deleteAccountGroup(groupId);
+    _accountGroups = await _db.getAllAccountGroups();
+    _accounts = await _db.getAllAccounts();
     notifyListeners();
   }
 
@@ -104,14 +121,49 @@ class MoneyProvider extends ChangeNotifier {
     }).toList();
   }
 
-  /// Totale Entrate del mese selezionato
+  /// Restituisce i movimenti del mese selezionato che appartengono a uno specifico Conto
+  List<MoneyTransaction> getAccountMonthlyTransactions(String accountId) {
+    return monthlyTransactions.where((tx) {
+      return tx.accountId == accountId || tx.toAccountId == accountId;
+    }).toList();
+  }
+
+  /// Totale Depositi / Entrate del mese per uno specifico Conto (Entrate + Trasferimenti in ingresso)
+  double getAccountMonthlyDeposits(String accountId) {
+    double total = 0.0;
+    for (final tx in getAccountMonthlyTransactions(accountId)) {
+      if (tx.type == TransactionType.income && tx.accountId == accountId) {
+        total += tx.amount;
+      } else if (tx.type == TransactionType.transfer &&
+          tx.toAccountId == accountId) {
+        total += tx.amount;
+      }
+    }
+    return total;
+  }
+
+  /// Totale Prelievi / Uscite del mese per uno specifico Conto (Spese + Trasferimenti in uscita)
+  double getAccountMonthlyWithdrawals(String accountId) {
+    double total = 0.0;
+    for (final tx in getAccountMonthlyTransactions(accountId)) {
+      if (tx.type == TransactionType.expense && tx.accountId == accountId) {
+        total += tx.amount;
+      } else if (tx.type == TransactionType.transfer &&
+          tx.accountId == accountId) {
+        total += tx.amount;
+      }
+    }
+    return total;
+  }
+
+  /// Totale Entrate del mese selezionato (tutti i conti)
   double get monthlyIncome {
     return monthlyTransactions
         .where((tx) => tx.type == TransactionType.income)
         .fold(0.0, (sum, tx) => sum + tx.amount);
   }
 
-  /// Totale Uscite del mese selezionato
+  /// Totale Uscite del mese selezionato (tutti i conti)
   double get monthlyExpenses {
     return monthlyTransactions
         .where((tx) => tx.type == TransactionType.expense)
@@ -121,14 +173,14 @@ class MoneyProvider extends ChangeNotifier {
   /// Bilancio netto del mese selezionato
   double get monthlyBalance => monthlyIncome - monthlyExpenses;
 
-  /// Calcola il saldo attuale di un singolo conto (Contanti, Banca, Carte, Risparmi)
+  /// Calcola il saldo attuale di un singolo conto
   double getAccountBalance(String accountId) {
     final account = _accounts.firstWhere(
       (a) => a.id == accountId,
       orElse: () => Account(
         id: accountId,
         name: '',
-        type: AccountType.cash,
+        groupId: 'grp_cash',
       ),
     );
 
@@ -243,6 +295,14 @@ class MoneyProvider extends ChangeNotifier {
       return _accounts.firstWhere((a) => a.id == accountId);
     } catch (_) {
       return null;
+    }
+  }
+
+  AccountGroup? getAccountGroupById(String groupId) {
+    try {
+      return _accountGroups.firstWhere((g) => g.id == groupId);
+    } catch (_) {
+      return _accountGroups.isNotEmpty ? _accountGroups.first : null;
     }
   }
 }

@@ -8,7 +8,12 @@ import 'accounts_screen.dart';
 import 'categories_screen.dart';
 
 class AddTransactionScreen extends StatefulWidget {
-  const AddTransactionScreen({super.key});
+  final String? initialAccountId;
+
+  const AddTransactionScreen({
+    super.key,
+    this.initialAccountId,
+  });
 
   @override
   State<AddTransactionScreen> createState() => _AddTransactionScreenState();
@@ -32,9 +37,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (!_initialized) {
       final provider = MoneyScope.read(context);
       if (provider.accounts.isNotEmpty) {
-        _selectedAccountId = provider.accounts.first.id;
+        if (widget.initialAccountId != null &&
+            provider.accounts.any((a) => a.id == widget.initialAccountId)) {
+          _selectedAccountId = widget.initialAccountId;
+        } else {
+          _selectedAccountId = provider.accounts.first.id;
+        }
         if (provider.accounts.length > 1) {
-          _selectedToAccountId = provider.accounts[1].id;
+          final other = provider.accounts
+              .firstWhere((a) => a.id != _selectedAccountId,
+                  orElse: () => provider.accounts.first);
+          _selectedToAccountId = other.id;
         }
       }
       _resetCategorySelection(provider);
@@ -118,7 +131,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         ? provider.incomeCategories
         : provider.expenseCategories;
 
-    // Assicura che l'ID selezionato sia valido se una categoria o conto viene eliminato
     if (availableCategories.isNotEmpty &&
         !availableCategories.any((c) => c.id == _selectedCategoryId)) {
       _selectedCategoryId = availableCategories.first.id;
@@ -322,7 +334,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 ],
               ),
               const SizedBox(height: 6),
-              // Griglia visuale delle categorie + pulsante "+ Nuova Categoria"
               Wrap(
                 spacing: 8,
                 runSpacing: 8,

@@ -2,37 +2,41 @@ import '../models/account.dart';
 import '../models/category.dart';
 import '../models/transaction.dart';
 
-/// Gestisce lo storage locale multipiattaforma per Conti, Categorie, Movimenti e Impostazioni
+/// Gestisce lo storage locale multipiattaforma per Gruppi di Conti, Conti, Categorie, Movimenti e Impostazioni
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
 
   bool _enableCsvImport = true;
   bool _enableNotificationReader = false;
 
+  final List<AccountGroup> _accountGroups = List<AccountGroup>.from(
+    AccountGroup.defaultGroups,
+  );
+
   final List<Account> _accounts = [
     Account(
       id: 'acc_cash',
       name: 'Portafoglio Contanti',
-      type: AccountType.cash,
+      groupId: 'grp_cash',
       initialBalance: 120.00,
     ),
     Account(
       id: 'acc_bank_main',
       name: 'Conto Corrente Principale',
-      type: AccountType.bankAccount,
+      groupId: 'grp_bank',
       initialBalance: 1450.00,
       iban: 'IT60X0306909606100000123456',
     ),
     Account(
       id: 'acc_card_revolut',
       name: 'Carta Revolut / Prepagata',
-      type: AccountType.creditCard,
+      groupId: 'grp_card',
       initialBalance: 250.00,
     ),
     Account(
       id: 'acc_savings',
       name: 'Salvadanaio Risparmi',
-      type: AccountType.savings,
+      groupId: 'grp_savings',
       initialBalance: 3000.00,
     ),
   ];
@@ -58,6 +62,40 @@ class DatabaseHelper {
     _enableNotificationReader = value;
   }
 
+  // --- CRUD ACCOUNT GROUPS (GRUPPI DI CONTI) ---
+  Future<List<AccountGroup>> getAllAccountGroups() async {
+    return List<AccountGroup>.unmodifiable(_accountGroups);
+  }
+
+  Future<void> upsertAccountGroup(AccountGroup group) async {
+    final index = _accountGroups.indexWhere((g) => g.id == group.id);
+    if (index >= 0) {
+      _accountGroups[index] = group;
+    } else {
+      _accountGroups.add(group);
+    }
+  }
+
+  Future<void> deleteAccountGroup(String groupId) async {
+    if (_accountGroups.length <= 1) return;
+    _accountGroups.removeWhere((g) => g.id == groupId);
+    // Sposta eventuali conti rimasti orfani nel primo gruppo disponibile
+    final fallbackGroupId = _accountGroups.first.id;
+    for (int i = 0; i < _accounts.length; i++) {
+      if (_accounts[i].groupId == groupId) {
+        final old = _accounts[i];
+        _accounts[i] = Account(
+          id: old.id,
+          name: old.name,
+          groupId: fallbackGroupId,
+          initialBalance: old.initialBalance,
+          currency: old.currency,
+          iban: old.iban,
+        );
+      }
+    }
+  }
+
   // --- CRUD ACCOUNTS (CONTI) ---
   Future<List<Account>> getAllAccounts() async {
     return List<Account>.unmodifiable(_accounts);
@@ -73,7 +111,7 @@ class DatabaseHelper {
   }
 
   Future<void> deleteAccount(String accountId) async {
-    if (_accounts.length <= 1) return; // Mantiene almeno un conto attivo
+    if (_accounts.length <= 1) return;
     _accounts.removeWhere((a) => a.id == accountId);
     _transactions.removeWhere(
       (t) => t.accountId == accountId || t.toAccountId == accountId,

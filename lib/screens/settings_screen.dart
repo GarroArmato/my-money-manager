@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../models/account.dart';
 import '../models/category.dart';
 import '../services/notification_reader_service.dart';
 import '../utils/money_scope.dart';
@@ -28,7 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final provider = MoneyScope.of(context);
     final bankAccount = provider.accounts.firstWhere(
-      (a) => a.type == AccountType.bankAccount,
+      (a) => a.groupId == 'grp_bank',
       orElse: () => provider.accounts.first,
     );
 
@@ -41,7 +40,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           // Sezione Categorie & Conti in stile Money Manager
           Text(
-            'CATEGORIE E CONTI',
+            'CATEGORIE, GRUPPI E CONTI',
             style: Theme.of(context).textTheme.labelLarge,
           ),
           const SizedBox(height: 8),
@@ -99,6 +98,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const Divider(height: 1),
                 ListTile(
                   leading: const CircleAvatar(
+                    child: Icon(Icons.create_new_folder_outlined),
+                  ),
+                  title: const Text(
+                    'Crea Nuovo Gruppo di Conti',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text(
+                    '${provider.accountGroups.length} gruppi attivi (es. Contanti, Banche, Carte, Crypto...)',
+                  ),
+                  trailing: const Icon(Icons.add),
+                  onTap: () => showAccountGroupEditorDialog(context),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const CircleAvatar(
                     child: Icon(Icons.account_balance_wallet_outlined),
                   ),
                   title: const Text(
@@ -106,7 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: const Text(
-                    'Aggiungi un nuovo conto in Contanti, Conti Bancari, Carte o Risparmi',
+                    'Aggiungi un nuovo conto in qualsiasi gruppo',
                   ),
                   trailing: const Icon(Icons.add),
                   onTap: () => showAccountEditorDialog(context),
@@ -133,7 +147,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               subtitle: const Text(
-                'Mostra nei conti bancari e carte il pulsante per importare e categorizzare i file CSV scaricati dall\'home banking.',
+                'Mostra nei conti abilitati il pulsante per importare e categorizzare i file CSV scaricati dall\'home banking.',
               ),
               value: provider.enableCsvImport,
               onChanged: (val) => provider.toggleCsvImport(val),

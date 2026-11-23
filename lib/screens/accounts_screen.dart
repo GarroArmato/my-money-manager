@@ -3,12 +3,158 @@ import '../models/account.dart';
 import '../services/csv_import_service.dart';
 import '../utils/formatters.dart';
 import '../utils/money_scope.dart';
+import 'account_detail_screen.dart';
 
-/// Mostra il dialog modale per Creare o Modificare un Conto (Contanti, Banca, Carta, Risparmi)
+/// Mostra il dialog per Creare o Modificare un Gruppo di Conti (es. Contanti, Conti Bancari, Crypto, Buoni Pasto...)
+Future<AccountGroup?> showAccountGroupEditorDialog(
+  BuildContext context, {
+  AccountGroup? existingGroup,
+}) async {
+  final nameController = TextEditingController(
+    text: existingGroup?.name ?? '',
+  );
+  String selectedIconKey = existingGroup?.iconKey ??
+      AccountGroup.availableGroupIcons.keys.first;
+  bool supportsCsv = existingGroup?.supportsCsvImport ?? true;
+
+  return showDialog<AccountGroup>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: Text(
+              existingGroup == null
+                  ? 'Nuovo Gruppo di Conti'
+                  : 'Modifica Gruppo di Conti',
+            ),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        labelText:
+                            'Nome Gruppo (es. Crypto, Buoni Pasto, Prestiti...)',
+                        prefixIcon: Icon(
+                          AccountGroup.availableGroupIcons[selectedIconKey] ??
+                              Icons.folder_outlined,
+                        ),
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Icona del Gruppo',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children:
+                          AccountGroup.availableGroupIcons.entries.map((e) {
+                        final isSelected = e.key == selectedIconKey;
+                        return InkWell(
+                          onTap: () {
+                            setDialogState(() {
+                              selectedIconKey = e.key;
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Theme.of(ctx).colorScheme.primaryContainer
+                                  : Theme.of(ctx)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(10),
+                              border: isSelected
+                                  ? Border.all(
+                                      color: Theme.of(ctx).colorScheme.primary,
+                                      width: 2,
+                                    )
+                                  : null,
+                            ),
+                            child: Icon(
+                              e.value,
+                              color: isSelected
+                                  ? Theme.of(ctx).colorScheme.primary
+                                  : Theme.of(ctx).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text(
+                        'Abilita importazione CSV per questo gruppo',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      value: supportsCsv,
+                      onChanged: (val) {
+                        setDialogState(() {
+                          supportsCsv = val;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Annulla'),
+              ),
+              FilledButton.icon(
+                onPressed: () async {
+                  final name = nameController.text.trim();
+                  if (name.isEmpty) return;
+
+                  final grp = AccountGroup(
+                    id: existingGroup?.id ?? AppFormatters.generateId('grp'),
+                    name: name,
+                    iconKey: selectedIconKey,
+                    supportsCsvImport: supportsCsv,
+                  );
+
+                  await MoneyScope.read(context).saveAccountGroup(grp);
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop(grp);
+                  }
+                },
+                icon: const Icon(Icons.check),
+                label: const Text('Salva Gruppo'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
+/// Mostra il dialog modale per Creare o Modificare un Conto
 Future<Account?> showAccountEditorDialog(
   BuildContext context, {
   Account? existingAccount,
+  String? initialGroupId,
 }) async {
+  final provider = MoneyScope.read(context);
   final nameController = TextEditingController(
     text: existingAccount?.name ?? '',
   );
@@ -20,50 +166,80 @@ Future<Account?> showAccountEditorDialog(
   final ibanController = TextEditingController(
     text: existingAccount?.iban ?? '',
   );
-  AccountType selectedType = existingAccount?.type ?? AccountType.bankAccount;
+  String selectedGroupId = existingAccount?.groupId ??
+      initialGroupId ??
+      (provider.accountGroups.isNotEmpty
+          ? provider.accountGroups.first.id
+          : 'grp_cash');
 
   return showDialog<Account>(
     context: context,
     builder: (dialogContext) {
       return StatefulBuilder(
         builder: (ctx, setDialogState) {
+          final currentGroups = MoneyScope.of(ctx).accountGroups;
+          if (currentGroups.isNotEmpty &&
+              !currentGroups.any((g) => g.id == selectedGroupId)) {
+            selectedGroupId = currentGroups.first.id;
+          }
+
           return AlertDialog(
             title: Text(
               existingAccount == null ? 'Nuovo Conto' : 'Modifica Conto',
             ),
             content: SizedBox(
-              width: 420,
+              width: 430,
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Gruppo di Conto (Contanti, Conti Bancari, Carte, Risparmi)
-                    DropdownButtonFormField<AccountType>(
-                      value: selectedType,
-                      decoration: const InputDecoration(
-                        labelText: 'Gruppo Conto',
-                        prefixIcon: Icon(Icons.folder_outlined),
-                        border: OutlineInputBorder(),
-                      ),
-                      items: AccountType.values
-                          .map((t) => DropdownMenuItem(
-                                value: t,
-                                child: Row(
-                                  children: [
-                                    Icon(t.icon, size: 20),
-                                    const SizedBox(width: 8),
-                                    Text(t.label),
-                                  ],
-                                ),
-                              ))
-                          .toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setDialogState(() {
-                            selectedType = val;
-                          });
-                        }
-                      },
+                    // Scelta Gruppo di Conto + pulsante "+ Nuovo Gruppo"
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: selectedGroupId,
+                            decoration: const InputDecoration(
+                              labelText: 'Gruppo di Conti',
+                              prefixIcon: Icon(Icons.folder_outlined),
+                              border: OutlineInputBorder(),
+                            ),
+                            items: currentGroups
+                                .map((g) => DropdownMenuItem(
+                                      value: g.id,
+                                      child: Row(
+                                        children: [
+                                          Icon(g.icon, size: 20),
+                                          const SizedBox(width: 8),
+                                          Text(g.name),
+                                        ],
+                                      ),
+                                    ))
+                                .toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setDialogState(() {
+                                  selectedGroupId = val;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filledTonal(
+                          tooltip: 'Crea Nuovo Gruppo di Conti',
+                          onPressed: () async {
+                            final newGrp =
+                                await showAccountGroupEditorDialog(context);
+                            if (newGrp != null) {
+                              setDialogState(() {
+                                selectedGroupId = newGrp.id;
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.create_new_folder_outlined),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 14),
 
@@ -73,7 +249,7 @@ Future<Account?> showAccountEditorDialog(
                       autofocus: true,
                       decoration: const InputDecoration(
                         labelText:
-                            'Nome Conto (es. Intesa, PostePay, Contanti...)',
+                            'Nome Conto (es. Intesa, PostePay, Ticket...)',
                         prefixIcon: Icon(Icons.account_balance_wallet_outlined),
                         border: OutlineInputBorder(),
                       ),
@@ -128,7 +304,7 @@ Future<Account?> showAccountEditorDialog(
                   final acc = Account(
                     id: existingAccount?.id ?? AppFormatters.generateId('acc'),
                     name: name,
-                    type: selectedType,
+                    groupId: selectedGroupId,
                     initialBalance: initialBalance,
                     iban: ibanText.isEmpty ? null : ibanText,
                   );
@@ -230,14 +406,20 @@ class AccountsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Conti & Patrimonio'),
+        title: const Text('Conti & Gruppi'),
         actions: [
+          TextButton.icon(
+            onPressed: () => showAccountGroupEditorDialog(context),
+            icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+            label: const Text('+ Gruppo'),
+          ),
+          const SizedBox(width: 4),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: FilledButton.tonalIcon(
               onPressed: () => showAccountEditorDialog(context),
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('Nuovo Conto'),
+              label: const Text('+ Conto'),
             ),
           ),
         ],
@@ -274,14 +456,13 @@ class AccountsScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          // Raggruppamento dei conti per Gruppo (Contanti, Conti Bancari, Carte, Risparmi)
-          ...AccountType.values.map((groupType) {
+          // Raggruppamento dei conti per Gruppo di Conti personalizzabile
+          ...provider.accountGroups.map((group) {
             final groupAccounts = provider.accounts
-                .where((a) => a.type == groupType)
+                .where((a) => a.groupId == group.id)
                 .toList();
-            if (groupAccounts.isEmpty) return const SizedBox.shrink();
 
             final groupSubtotal = groupAccounts.fold(
               0.0,
@@ -291,24 +472,22 @@ class AccountsScreen extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Intestazione del Gruppo di Conti con subtotale e azioni (+ Conto nel gruppo / Modifica gruppo)
                 Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Icon(groupType.icon, size: 18, color: Colors.grey),
-                          const SizedBox(width: 6),
-                          Text(
-                            groupType.label.toUpperCase(),
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelLarge
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                        ],
+                      Icon(group.icon, size: 18, color: Colors.grey),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          group.name.toUpperCase(),
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
                       ),
                       Text(
                         AppFormatters.formatCurrency(groupSubtotal),
@@ -317,127 +496,231 @@ class AccountsScreen extends StatelessWidget {
                           color: Colors.grey,
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                ...groupAccounts.map((account) {
-                  final balance = provider.getAccountBalance(account.id);
-                  final supportsCsv =
-                      account.type == AccountType.bankAccount ||
-                          account.type == AccountType.creditCard;
-
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
+                      const SizedBox(width: 4),
+                      IconButton(
+                        tooltip: 'Aggiungi conto in ${group.name}',
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.add_circle_outline, size: 18),
+                        onPressed: () {
+                          showAccountEditorDialog(
+                            context,
+                            initialGroupId: group.id,
+                          );
+                        },
                       ),
-                      child: Column(
-                        children: [
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: CircleAvatar(
-                              child: Icon(account.type.icon),
-                            ),
-                            title: Text(
-                              account.name,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            subtitle: Text(
-                              account.iban != null && account.iban!.isNotEmpty
-                                  ? account.iban!
-                                  : account.type.label,
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
+                      PopupMenuButton<String>(
+                        tooltip: 'Opzioni gruppo',
+                        icon: const Icon(Icons.more_horiz,
+                            size: 18, color: Colors.grey),
+                        onSelected: (action) {
+                          if (action == 'edit_group') {
+                            showAccountGroupEditorDialog(
+                              context,
+                              existingGroup: group,
+                            );
+                          } else if (action == 'delete_group') {
+                            provider.deleteAccountGroup(group.id);
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          const PopupMenuItem(
+                            value: 'edit_group',
+                            child: Row(
                               children: [
-                                Text(
-                                  AppFormatters.formatCurrency(balance),
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: balance < 0
-                                        ? Colors.red.shade700
-                                        : null,
-                                  ),
-                                ),
-                                PopupMenuButton<String>(
-                                  onSelected: (action) {
-                                    if (action == 'edit') {
-                                      showAccountEditorDialog(
-                                        context,
-                                        existingAccount: account,
-                                      );
-                                    } else if (action == 'delete') {
-                                      provider.deleteAccount(account.id);
-                                    }
-                                  },
-                                  itemBuilder: (_) => [
-                                    const PopupMenuItem(
-                                      value: 'edit',
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.edit_outlined, size: 18),
-                                          SizedBox(width: 8),
-                                          Text('Modifica Conto'),
-                                        ],
-                                      ),
-                                    ),
-                                    if (provider.accounts.length > 1)
-                                      const PopupMenuItem(
-                                        value: 'delete',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.delete_outline,
-                                                size: 18, color: Colors.red),
-                                            SizedBox(width: 8),
-                                            Text('Elimina Conto',
-                                                style: TextStyle(
-                                                    color: Colors.red)),
-                                          ],
-                                        ),
-                                      ),
-                                  ],
-                                ),
+                                Icon(Icons.edit_outlined, size: 18),
+                                SizedBox(width: 8),
+                                Text('Modifica Gruppo'),
                               ],
                             ),
                           ),
-                          if (supportsCsv && provider.enableCsvImport) ...[
-                            const Divider(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Row(
-                                  children: [
-                                    Icon(
-                                      Icons.table_chart_outlined,
-                                      size: 15,
-                                      color: Colors.teal,
-                                    ),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      'Importazione movimenti da CSV / Excel',
-                                      style: TextStyle(fontSize: 12),
-                                    ),
-                                  ],
-                                ),
-                                TextButton.icon(
-                                  onPressed: () =>
-                                      _showCsvImportDialog(context, account),
-                                  icon: const Icon(Icons.upload_file, size: 16),
-                                  label: const Text('Importa CSV'),
-                                ),
-                              ],
+                          if (provider.accountGroups.length > 1)
+                            const PopupMenuItem(
+                              value: 'delete_group',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete_outline,
+                                      size: 18, color: Colors.red),
+                                  SizedBox(width: 8),
+                                  Text('Elimina Gruppo',
+                                      style: TextStyle(color: Colors.red)),
+                                ],
+                              ),
                             ),
-                          ],
                         ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                if (groupAccounts.isEmpty)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: ListTile(
+                      dense: true,
+                      title: Text(
+                        'Nessun conto in "${group.name}". Tocca per aggiungerne uno.',
+                        style:
+                            const TextStyle(color: Colors.grey, fontSize: 13),
+                      ),
+                      trailing: const Icon(Icons.add, size: 18),
+                      onTap: () => showAccountEditorDialog(
+                        context,
+                        initialGroupId: group.id,
+                      ),
+                    ),
+                  ),
+
+                ...groupAccounts.map((account) {
+                  final balance = provider.getAccountBalance(account.id);
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      // Cliccando sul conto si apre la pagina con i movimenti di quel conto (come in Money Manager!)
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => AccountDetailScreen(
+                              accountId: account.id,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        child: Column(
+                          children: [
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: CircleAvatar(
+                                child: Icon(group.icon),
+                              ),
+                              title: Text(
+                                account.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              subtitle: Text(
+                                account.iban != null && account.iban!.isNotEmpty
+                                    ? '${account.iban!} • Tocca per vedere i movimenti'
+                                    : 'Tocca per vedere i movimenti del conto',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    AppFormatters.formatCurrency(balance),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: balance < 0
+                                          ? Colors.red.shade700
+                                          : null,
+                                    ),
+                                  ),
+                                  PopupMenuButton<String>(
+                                    onSelected: (action) {
+                                      if (action == 'view') {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => AccountDetailScreen(
+                                              accountId: account.id,
+                                            ),
+                                          ),
+                                        );
+                                      } else if (action == 'edit') {
+                                        showAccountEditorDialog(
+                                          context,
+                                          existingAccount: account,
+                                        );
+                                      } else if (action == 'delete') {
+                                        provider.deleteAccount(account.id);
+                                      }
+                                    },
+                                    itemBuilder: (_) => [
+                                      const PopupMenuItem(
+                                        value: 'view',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.receipt_long, size: 18),
+                                            SizedBox(width: 8),
+                                            Text('Vedi Movimenti Conto'),
+                                          ],
+                                        ),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'edit',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.edit_outlined, size: 18),
+                                            SizedBox(width: 8),
+                                            Text('Modifica Conto'),
+                                          ],
+                                        ),
+                                      ),
+                                      if (provider.accounts.length > 1)
+                                        const PopupMenuItem(
+                                          value: 'delete',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.delete_outline,
+                                                  size: 18, color: Colors.red),
+                                              SizedBox(width: 8),
+                                              Text('Elimina Conto',
+                                                  style: TextStyle(
+                                                      color: Colors.red)),
+                                            ],
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (group.supportsCsvImport &&
+                                provider.enableCsvImport) ...[
+                              const Divider(height: 8),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Row(
+                                    children: [
+                                      Icon(
+                                        Icons.table_chart_outlined,
+                                        size: 15,
+                                        color: Colors.teal,
+                                      ),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        'Importazione movimenti da CSV / Excel',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: () =>
+                                        _showCsvImportDialog(context, account),
+                                    icon:
+                                        const Icon(Icons.upload_file, size: 16),
+                                    label: const Text('Importa CSV'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
                   );
                 }),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
               ],
             );
           }),
