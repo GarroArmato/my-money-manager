@@ -142,12 +142,12 @@ class AccountDetailScreen extends StatelessWidget {
                     _AccountSummaryMetric(
                       label: 'Deposito',
                       amount: AppFormatters.formatCurrency(monthlyDeposits),
-                      color: Colors.blue.shade700,
+                      color: provider.secondaryColor,
                     ),
                     _AccountSummaryMetric(
                       label: 'Prelievo',
                       amount: AppFormatters.formatCurrency(monthlyWithdrawals),
-                      color: Colors.red.shade700,
+                      color: provider.expenseColor,
                     ),
                     _AccountSummaryMetric(
                       label: 'Totale Mese',

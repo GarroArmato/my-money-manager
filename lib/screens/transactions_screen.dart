@@ -61,13 +61,13 @@ class TransactionsScreen extends StatelessWidget {
                 _SummaryColumn(
                   label: 'Entrate',
                   amount: AppFormatters.formatCurrency(provider.monthlyIncome),
-                  color: Colors.green.shade700,
+                  color: provider.secondaryColor,
                 ),
                 _SummaryColumn(
                   label: 'Uscite',
                   amount:
                       AppFormatters.formatCurrency(provider.monthlyExpenses),
-                  color: Colors.red.shade700,
+                  color: provider.expenseColor,
                 ),
                 _SummaryColumn(
                   label: 'Totale',
@@ -112,6 +112,7 @@ class _DailyTransactionGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final provider = MoneyScope.of(context);
     final firstDate = dayTransactions.first.date;
 
     final dayIncome = dayTransactions
@@ -180,7 +181,7 @@ class _DailyTransactionGroup extends StatelessWidget {
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
-                        color: Colors.green.shade700,
+                        color: provider.secondaryColor,
                       ),
                     ),
                   ),
@@ -190,7 +191,7 @@ class _DailyTransactionGroup extends StatelessWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
-                      color: Colors.red.shade700,
+                      color: provider.expenseColor,
                     ),
                   ),
               ],
@@ -244,7 +245,7 @@ class _TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = MoneyScope.read(context);
+    final provider = MoneyScope.of(context);
     final category = provider.getCategoryById(transaction.categoryId);
     final account = provider.getAccountById(transaction.accountId);
     final toAccount = transaction.toAccountId != null
@@ -256,7 +257,7 @@ class _TransactionTile extends StatelessWidget {
 
     final Color amountColor = isTransfer
         ? Colors.blueGrey
-        : (isExpense ? Colors.red.shade700 : Colors.green.shade700);
+        : (isExpense ? provider.expenseColor : provider.secondaryColor);
 
     final String prefix = isTransfer ? '⇄ ' : (isExpense ? '- ' : '+ ');
 

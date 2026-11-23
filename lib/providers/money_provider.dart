@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' hide Category;
+import 'package:flutter/material.dart';
 import '../models/account.dart';
 import '../models/category.dart';
 import '../models/transaction.dart';
@@ -19,6 +19,12 @@ class MoneyProvider extends ChangeNotifier {
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   bool _isLoading = false;
 
+  // Colori Tema App (Default: Viola & Verde, configurabili dall'utente)
+  int _primaryColorValue = DatabaseHelper.defaultPrimaryPurple;
+  int _secondaryColorValue = DatabaseHelper.defaultSecondaryGreen;
+  int _expenseColorValue = DatabaseHelper.defaultExpenseColor;
+  ThemeMode _themeMode = ThemeMode.system;
+
   // Flag Impostazioni (Punto 2 e Punto 3 facoltativi)
   bool _enableCsvImport = true;
   bool _enableNotificationReader = false;
@@ -36,7 +42,15 @@ class MoneyProvider extends ChangeNotifier {
   bool get enableCsvImport => _enableCsvImport;
   bool get enableNotificationReader => _enableNotificationReader;
 
-  /// Inizializza e carica gruppi di conti, conti, categorie, movimenti e impostazioni
+  int get primaryColorValue => _primaryColorValue;
+  int get secondaryColorValue => _secondaryColorValue;
+  int get expenseColorValue => _expenseColorValue;
+  Color get primaryColor => Color(_primaryColorValue);
+  Color get secondaryColor => Color(_secondaryColorValue);
+  Color get expenseColor => Color(_expenseColorValue);
+  ThemeMode get themeMode => _themeMode;
+
+  /// Inizializza e carica gruppi di conti, conti, categorie, movimenti, colori e impostazioni
   Future<void> loadData() async {
     _isLoading = true;
     notifyListeners();
@@ -47,8 +61,49 @@ class MoneyProvider extends ChangeNotifier {
     _transactions = await _db.getAllTransactions();
     _enableCsvImport = await _db.getEnableCsvImport();
     _enableNotificationReader = await _db.getEnableNotificationReader();
+    _primaryColorValue = await _db.getPrimaryColorValue();
+    _secondaryColorValue = await _db.getSecondaryColorValue();
+    _expenseColorValue = await _db.getExpenseColorValue();
+
+    final modeIndex = await _db.getThemeModeIndex();
+    _themeMode = ThemeMode.values[modeIndex.clamp(0, 2)];
 
     _isLoading = false;
+    notifyListeners();
+  }
+
+  // --- GESTIONE COLORI E TEMA (DEFAULT VIOLA & VERDE) ---
+  Future<void> setPrimaryColor(int colorValue) async {
+    _primaryColorValue = colorValue;
+    await _db.setPrimaryColorValue(colorValue);
+    notifyListeners();
+  }
+
+  Future<void> setSecondaryColor(int colorValue) async {
+    _secondaryColorValue = colorValue;
+    await _db.setSecondaryColorValue(colorValue);
+    notifyListeners();
+  }
+
+  Future<void> setExpenseColor(int colorValue) async {
+    _expenseColorValue = colorValue;
+    await _db.setExpenseColorValue(colorValue);
+    notifyListeners();
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    _themeMode = mode;
+    await _db.setThemeModeIndex(mode.index);
+    notifyListeners();
+  }
+
+  Future<void> resetDefaultThemeColors() async {
+    _primaryColorValue = DatabaseHelper.defaultPrimaryPurple;
+    _secondaryColorValue = DatabaseHelper.defaultSecondaryGreen;
+    _expenseColorValue = DatabaseHelper.defaultExpenseColor;
+    await _db.setPrimaryColorValue(_primaryColorValue);
+    await _db.setSecondaryColorValue(_secondaryColorValue);
+    await _db.setExpenseColorValue(_expenseColorValue);
     notifyListeners();
   }
 

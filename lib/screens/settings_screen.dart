@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/category.dart';
+import '../services/database_helper.dart';
 import '../services/notification_reader_service.dart';
 import '../utils/money_scope.dart';
 import 'accounts_screen.dart';
@@ -16,6 +17,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _customNotifController = TextEditingController(
     text: NotificationReaderService.sampleBankNotifications.first,
   );
+
+  static const List<int> _themePalette = [
+    DatabaseHelper.defaultPrimaryPurple, // Viola Default (0xFF6A1B9A)
+    0xFF4A148C, // Viola Scuro
+    0xFF7E57C2, // Lavanda / Viola Chiaro
+    DatabaseHelper.defaultSecondaryGreen, // Verde Default (0xFF2E7D32)
+    0xFF00897B, // Verde Acqua (Teal)
+    0xFF43A047, // Verde Brillante
+    0xFF1E88E5, // Blu
+    0xFF283593, // Blu Notte
+    0xFFD81B60, // Magenta
+    DatabaseHelper.defaultExpenseColor, // Rosso (0xFFD32F2F)
+    0xFFFB8C00, // Arancione
+    0xFF546E7A, // Grigio Ardesia
+  ];
 
   @override
   void dispose() {
@@ -38,7 +54,100 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
         children: [
-          // Sezione Categorie & Conti in stile Money Manager
+          // --- SEZIONE 1: ASPETTO E COLORI (DEFAULT VIOLA & VERDE) ---
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'ASPETTO E COLORI APP',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              TextButton.icon(
+                onPressed: () => provider.resetDefaultThemeColors(),
+                icon: const Icon(Icons.restore, size: 16),
+                label: const Text('Reset Viola & Verde'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Selettore Tema Chiaro / Scuro / Sistema
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<ThemeMode>(
+                      segments: const [
+                        ButtonSegment(
+                          value: ThemeMode.system,
+                          label: Text('Auto'),
+                          icon: Icon(Icons.brightness_auto, size: 18),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.light,
+                          label: Text('Chiaro'),
+                          icon: Icon(Icons.light_mode_outlined, size: 18),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.dark,
+                          label: Text('Scuro'),
+                          icon: Icon(Icons.dark_mode_outlined, size: 18),
+                        ),
+                      ],
+                      selected: {provider.themeMode},
+                      onSelectionChanged: (sel) =>
+                          provider.setThemeMode(sel.first),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 1. Colore Principale App (Default: Viola)
+                  const Text(
+                    'Colore Principale App (Default: Viola)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  _ColorPickerRow(
+                    palette: _themePalette,
+                    selectedColorValue: provider.primaryColorValue,
+                    onSelect: (c) => provider.setPrimaryColor(c),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 2. Colore Secondario / Accento ed Entrate (Default: Verde)
+                  const Text(
+                    'Colore Secondario, Pulsanti & Entrate (Default: Verde)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  _ColorPickerRow(
+                    palette: _themePalette,
+                    selectedColorValue: provider.secondaryColorValue,
+                    onSelect: (c) => provider.setSecondaryColor(c),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 3. Colore Uscite / Passività
+                  const Text(
+                    'Colore Uscite & Passività',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  _ColorPickerRow(
+                    palette: _themePalette,
+                    selectedColorValue: provider.expenseColorValue,
+                    onSelect: (c) => provider.setExpenseColor(c),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // --- SEZIONE 2: CATEGORIE, GRUPPI E CONTI ---
           Text(
             'CATEGORIE, GRUPPI E CONTI',
             style: Theme.of(context).textTheme.labelLarge,
@@ -49,8 +158,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: Colors.red.withValues(alpha: 0.15),
-                    child: Icon(Icons.arrow_upward, color: Colors.red.shade700),
+                    backgroundColor:
+                        provider.expenseColor.withValues(alpha: 0.15),
+                    child:
+                        Icon(Icons.arrow_upward, color: provider.expenseColor),
                   ),
                   title: const Text(
                     'Categorie Uscite',
@@ -73,9 +184,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const Divider(height: 1),
                 ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: Colors.green.withValues(alpha: 0.15),
+                    backgroundColor:
+                        provider.secondaryColor.withValues(alpha: 0.15),
                     child: Icon(Icons.arrow_downward,
-                        color: Colors.green.shade700),
+                        color: provider.secondaryColor),
                   ),
                   title: const Text(
                     'Categorie Entrate',
@@ -130,6 +242,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 24),
 
+          // --- SEZIONE 3: COLLEGAMENTO BANCA FACOLTATIVO ---
           Text(
             'COLLEGAMENTO BANCA (FACOLTATIVO)',
             style: Theme.of(context).textTheme.labelLarge,
@@ -174,7 +287,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onChanged: (val) => provider.toggleNotificationReader(val),
                 ),
 
-                // Pannello di prova visibile solo quando il flag è attivo
                 if (provider.enableNotificationReader) ...[
                   const Divider(),
                   Padding(
@@ -268,6 +380,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ColorPickerRow extends StatelessWidget {
+  final List<int> palette;
+  final int selectedColorValue;
+  final ValueChanged<int> onSelect;
+
+  const _ColorPickerRow({
+    required this.palette,
+    required this.selectedColorValue,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: palette.map((col) {
+        final isSelected = col == selectedColorValue;
+        return InkWell(
+          onTap: () => onSelect(col),
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: Color(col),
+              shape: BoxShape.circle,
+              border: isSelected
+                  ? Border.all(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      width: 3,
+                    )
+                  : null,
+            ),
+            child: isSelected
+                ? const Icon(
+                    Icons.check,
+                    size: 18,
+                    color: Colors.white,
+                  )
+                : null,
+          ),
+        );
+      }).toList(),
     );
   }
 }

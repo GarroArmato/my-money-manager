@@ -2,12 +2,21 @@ import '../models/account.dart';
 import '../models/category.dart';
 import '../models/transaction.dart';
 
-/// Gestisce lo storage locale multipiattaforma per Gruppi di Conti, Conti, Categorie, Movimenti e Impostazioni
+/// Gestisce lo storage locale multipiattaforma per Gruppi di Conti, Conti, Categorie, Movimenti, Colori e Impostazioni
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
 
+  static const int defaultPrimaryPurple = 0xFF6A1B9A;   // Viola di default
+  static const int defaultSecondaryGreen = 0xFF2E7D32;  // Verde di default
+  static const int defaultExpenseColor = 0xFFD32F2F;    // Rosso uscite di default
+
   bool _enableCsvImport = true;
   bool _enableNotificationReader = false;
+
+  int _primaryColorValue = defaultPrimaryPurple;
+  int _secondaryColorValue = defaultSecondaryGreen;
+  int _expenseColorValue = defaultExpenseColor;
+  int _themeModeIndex = 0; // 0 = System, 1 = Light, 2 = Dark
 
   final List<AccountGroup> _accountGroups = List<AccountGroup>.from(
     AccountGroup.defaultGroups,
@@ -49,6 +58,20 @@ class DatabaseHelper {
 
   DatabaseHelper._init();
 
+  // --- COLORI E TEMA DELL'APP (DEFAULT: VIOLA & VERDE) ---
+  Future<int> getPrimaryColorValue() async => _primaryColorValue;
+  Future<void> setPrimaryColorValue(int val) async => _primaryColorValue = val;
+
+  Future<int> getSecondaryColorValue() async => _secondaryColorValue;
+  Future<void> setSecondaryColorValue(int val) async =>
+      _secondaryColorValue = val;
+
+  Future<int> getExpenseColorValue() async => _expenseColorValue;
+  Future<void> setExpenseColorValue(int val) async => _expenseColorValue = val;
+
+  Future<int> getThemeModeIndex() async => _themeModeIndex;
+  Future<void> setThemeModeIndex(int val) async => _themeModeIndex = val;
+
   // --- IMPOSTAZIONI (FLAG FACOLTATIVI) ---
   Future<bool> getEnableCsvImport() async => _enableCsvImport;
 
@@ -79,7 +102,6 @@ class DatabaseHelper {
   Future<void> deleteAccountGroup(String groupId) async {
     if (_accountGroups.length <= 1) return;
     _accountGroups.removeWhere((g) => g.id == groupId);
-    // Sposta eventuali conti rimasti orfani nel primo gruppo disponibile
     final fallbackGroupId = _accountGroups.first.id;
     for (int i = 0; i < _accounts.length; i++) {
       if (_accounts[i].groupId == groupId) {

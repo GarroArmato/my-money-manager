@@ -440,13 +440,13 @@ class AccountsScreen extends StatelessWidget {
                 _HeaderMetric(
                   label: 'Attività',
                   value: AppFormatters.formatCurrency(provider.totalAssets),
-                  color: Colors.blue.shade700,
+                  color: provider.secondaryColor,
                 ),
                 _HeaderMetric(
                   label: 'Passività',
                   value:
                       AppFormatters.formatCurrency(provider.totalLiabilities),
-                  color: Colors.red.shade700,
+                  color: provider.expenseColor,
                 ),
                 _HeaderMetric(
                   label: 'Totale',
