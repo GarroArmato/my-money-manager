@@ -410,25 +410,18 @@ class AccountsScreen extends StatelessWidget {
         title: 'Conti & Gruppi',
         icon: Icons.account_balance_outlined,
         actions: [
-          TextButton.icon(
+          _TopBarActionButton(
+            icon: Icons.create_new_folder_outlined,
+            label: 'Gruppo',
             onPressed: () => showAccountGroupEditorDialog(context),
-            icon: const Icon(
-              Icons.create_new_folder_outlined,
-              size: 16,
-              color: Colors.white,
-            ),
-            label: const Text(
-              '+ Gruppo',
-              style: TextStyle(color: Colors.white, fontSize: 12),
-            ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 8),
           Padding(
             padding: const EdgeInsets.only(right: 12),
-            child: FilledButton.tonalIcon(
+            child: _TopBarActionButton(
+              icon: Icons.add,
+              label: 'Conto',
               onPressed: () => showAccountEditorDialog(context),
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('+ Conto', style: TextStyle(fontSize: 12)),
             ),
           ),
         ],
@@ -734,6 +727,54 @@ class AccountsScreen extends StatelessWidget {
             );
           }),
         ],
+      ),
+    );
+  }
+}
+
+class _TopBarActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  const _TopBarActionButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.28),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 15, color: Colors.white),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.5,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -4,7 +4,6 @@ import '../models/transaction.dart';
 import '../providers/money_provider.dart';
 import '../utils/formatters.dart';
 import '../utils/money_scope.dart';
-import '../widgets/app_top_bar.dart';
 import 'accounts_screen.dart';
 import 'categories_screen.dart';
 
@@ -21,9 +20,9 @@ class AddTransactionScreen extends StatefulWidget {
 }
 
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
-  final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
+  final _descriptionController = TextEditingController();
 
   TransactionType _selectedType = TransactionType.expense;
   DateTime _selectedDate = DateTime.now();
@@ -31,6 +30,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   String? _selectedToAccountId;
   String? _selectedCategoryId;
   String? _selectedSubcategory;
+  String? _selectedTag;
+  bool _isRepeatEnabled = false;
   String _currentNoteQuery = '';
   bool _initialized = false;
 
@@ -93,6 +94,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   void dispose() {
     _amountController.dispose();
     _noteController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -165,12 +167,350 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
   }
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+  /// Pannello dal basso per scegliere Categoria e Sottocategoria (come in Money Manager)
+  Future<void> _showCategoryPickerSheet() async {
+    final currentKind = _selectedType == TransactionType.income
+        ? CategoryKind.income
+        : CategoryKind.expense;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final provider = MoneyScope.of(ctx);
+            final categories = currentKind == CategoryKind.income
+                ? provider.incomeCategories
+                : provider.expenseCategories;
+            final activeCat = provider.getCategoryById(_selectedCategoryId);
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          currentKind == CategoryKind.income
+                              ? 'Seleziona Categoria Entrata'
+                              : 'Seleziona Categoria Spesa',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            TextButton.icon(
+                              onPressed: () async {
+                                final created = await showCategoryEditorDialog(
+                                  context,
+                                  initialKind: currentKind,
+                                );
+                                if (created != null) {
+                                  setState(() {
+                                    _selectedCategoryId = created.id;
+                                    _selectedSubcategory =
+                                        created.subcategories.isNotEmpty
+                                            ? created.subcategories.first
+                                            : null;
+                                  });
+                                  setSheetState(() {});
+                                }
+                              },
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Nuova'),
+                            ),
+                            IconButton(
+                              tooltip: 'Gestisci categorie',
+                              icon: const Icon(Icons.settings_outlined, size: 20),
+                              onPressed: () {
+                                Navigator.of(sheetContext).pop();
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => CategoriesScreen(
+                                      initialKind: currentKind,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const Divider(),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: categories.map((cat) {
+                        final isSelected = cat.id == _selectedCategoryId;
+                        return ChoiceChip(
+                          avatar: Icon(
+                            cat.icon,
+                            size: 18,
+                            color: isSelected ? Colors.white : cat.color,
+                          ),
+                          label: Text(cat.name),
+                          selected: isSelected,
+                          selectedColor: cat.color,
+                          labelStyle: TextStyle(
+                            color: isSelected ? Colors.white : null,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                          showCheckmark: false,
+                          onSelected: (_) {
+                            setState(() {
+                              _selectedCategoryId = cat.id;
+                              _selectedSubcategory =
+                                  cat.subcategories.isNotEmpty
+                                      ? cat.subcategories.first
+                                      : null;
+                            });
+                            setSheetState(() {});
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    if (activeCat != null) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Sottocategoria (${activeCat.name})',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () async {
+                              await _promptNewSubcategory(activeCat);
+                              setSheetState(() {});
+                            },
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text('+ Sottocategoria'),
+                          ),
+                        ],
+                      ),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: activeCat.subcategories.map((sub) {
+                          final isSubSelected = sub == _selectedSubcategory;
+                          return ChoiceChip(
+                            label: Text(sub),
+                            selected: isSubSelected,
+                            onSelected: (_) {
+                              setState(() {
+                                _selectedSubcategory = sub;
+                              });
+                              Navigator.of(sheetContext).pop();
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        child: const Text('Conferma'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Pannello dal basso per scegliere il Conto (o crearne uno nuovo)
+  Future<void> _showAccountPickerSheet({required bool isDestination}) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        final provider = MoneyScope.of(sheetContext);
+        final currentId =
+            isDestination ? _selectedToAccountId : _selectedAccountId;
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      isDestination
+                          ? 'Seleziona Conto Destinazione'
+                          : 'Seleziona Conto',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () async {
+                        final created = await showAccountEditorDialog(context);
+                        if (created != null) {
+                          setState(() {
+                            if (isDestination) {
+                              _selectedToAccountId = created.id;
+                            } else {
+                              _selectedAccountId = created.id;
+                            }
+                          });
+                          if (sheetContext.mounted) {
+                            Navigator.of(sheetContext).pop();
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Nuovo Conto'),
+                    ),
+                  ],
+                ),
+                const Divider(),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: provider.accounts.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, idx) {
+                      final acc = provider.accounts[idx];
+                      final grp = provider.getAccountGroupById(acc.groupId);
+                      final isSelected = acc.id == currentId;
+
+                      return ListTile(
+                        leading: Icon(grp?.icon ?? Icons.account_balance_wallet),
+                        title: Text(
+                          acc.name,
+                          style: TextStyle(
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                        subtitle: grp != null ? Text(grp.name) : null,
+                        trailing: isSelected
+                            ? Icon(
+                                Icons.check,
+                                color: provider.secondaryColor,
+                              )
+                            : Text(
+                                AppFormatters.formatCurrency(
+                                  provider.getAccountBalance(acc.id),
+                                ),
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                        onTap: () {
+                          setState(() {
+                            if (isDestination) {
+                              _selectedToAccountId = acc.id;
+                            } else {
+                              _selectedAccountId = acc.id;
+                            }
+                          });
+                          Navigator.of(sheetContext).pop();
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _promptTagDialog() async {
+    final controller = TextEditingController(text: _selectedTag ?? '');
+    final tag = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Aggiungi Etichetta'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Etichetta (es. Vacanza, Lavoro, Rimborsabile)',
+              prefixText: '#',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            if (_selectedTag != null)
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(''),
+                child: const Text('Rimuovi'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text.trim()),
+              child: const Text('Conferma'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (tag != null && mounted) {
+      setState(() {
+        _selectedTag = tag.isEmpty ? null : tag;
+      });
+    }
+  }
+
+  Future<void> _saveTransaction({required bool closeOnSave}) async {
+    final rawAmount = _amountController.text.trim().replaceAll(',', '.');
+    final amount = double.tryParse(rawAmount);
+
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Inserisci un importo valido maggiore di zero.'),
+        ),
+      );
+      return;
+    }
     if (_selectedAccountId == null) return;
 
-    final rawAmount = _amountController.text.replaceAll(',', '.');
-    final amount = double.parse(rawAmount);
+    // Combina nota, eventuale etichetta ed eventuale descrizione extra
+    final parts = <String>[];
+    if (_noteController.text.trim().isNotEmpty) {
+      parts.add(_noteController.text.trim());
+    }
+    if (_descriptionController.text.trim().isNotEmpty) {
+      parts.add(_descriptionController.text.trim());
+    }
+    if (_selectedTag != null && _selectedTag!.isNotEmpty) {
+      parts.add('#$_selectedTag');
+    }
 
     final tx = MoneyTransaction(
       id: AppFormatters.generateId('tx'),
@@ -187,11 +527,28 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       subcategory: _selectedType == TransactionType.transfer
           ? null
           : _selectedSubcategory,
-      note: _noteController.text.trim(),
+      note: parts.join(' - '),
     );
 
     await MoneyScope.read(context).addTransaction(tx);
-    if (mounted) Navigator.of(context).pop();
+    if (!mounted) return;
+
+    if (closeOnSave) {
+      Navigator.of(context).pop();
+    } else {
+      // Modalità "Continua": pulisce importo e nota per inserire subito il movimento successivo
+      setState(() {
+        _amountController.clear();
+        _noteController.clear();
+        _descriptionController.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Movimento salvato! Puoi inserirne un altro.'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
   }
 
   @override
@@ -210,371 +567,635 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
 
     final selectedCategory = provider.getCategoryById(_selectedCategoryId);
+    final selectedAccount = _selectedAccountId != null
+        ? provider.getAccountById(_selectedAccountId!)
+        : null;
+    final selectedToAccount = _selectedToAccountId != null
+        ? provider.getAccountById(_selectedToAccountId!)
+        : null;
 
-    // Filtra i suggerimenti di note già scritte in precedenza dall'utente
+    // Colore attivo e titolo della schermata in base al tab (In | Spesa | Trasferimento)
+    final Color activeTabColor;
+    final String screenTitle;
+    switch (_selectedType) {
+      case TransactionType.income:
+        activeTabColor = provider.secondaryColor;
+        screenTitle = 'In';
+        break;
+      case TransactionType.expense:
+        activeTabColor = const Color(0xFFFF6B6B);
+        screenTitle = 'Spesa';
+        break;
+      case TransactionType.transfer:
+        activeTabColor = Colors.white;
+        screenTitle = 'Trasferimento';
+        break;
+    }
+
+    // Filtra i suggerimenti di note già scritte in precedenza
     final allSavedNotes = provider.suggestedNotes;
     final matchingNotes = allSavedNotes.where((n) {
       if (_currentNoteQuery.isEmpty) return true;
       final lowerN = n.toLowerCase();
       final lowerQ = _currentNoteQuery.toLowerCase();
       return lowerN.contains(lowerQ) && lowerN != lowerQ;
-    }).take(8).toList();
+    }).take(6).toList();
+
+    final categoryDisplay = selectedCategory != null
+        ? (_selectedSubcategory != null && _selectedSubcategory!.isNotEmpty
+            ? '${selectedCategory.name} / $_selectedSubcategory'
+            : selectedCategory.name)
+        : 'Seleziona categoria';
+
+    final dayString =
+        '${AppFormatters.formatShortWeekday(_selectedDate).toLowerCase()} ${AppFormatters.formatDate(_selectedDate)}';
+
+    final subtleLineColor = Colors.grey.withValues(alpha: 0.25);
 
     return Scaffold(
-      appBar: const AppTopBar(
-        title: 'Nuovo Movimento',
-        icon: Icons.add_card_outlined,
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        elevation: 0,
+        leadingWidth: 135,
+        leading: TextButton.icon(
+          onPressed: () => Navigator.of(context).pop(),
+          icon: Icon(
+            Icons.chevron_left,
+            size: 26,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+          label: Text(
+            'Transazioni',
+            style: TextStyle(
+              fontSize: 15,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ),
+        title: Text(
+          screenTitle,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: 'Preferiti / Modelli',
+            icon: Icon(
+              Icons.star_border,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            onPressed: () {
+              if (allSavedNotes.isNotEmpty) {
+                setState(() {
+                  _noteController.text = allSavedNotes.first;
+                });
+              }
+            },
+          ),
+        ],
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // 1. Selettore Tipo (Uscita / Entrata / Trasferimento)
-            SegmentedButton<TransactionType>(
-              segments: const [
-                ButtonSegment(
-                  value: TransactionType.expense,
-                  label: Text('Uscita'),
-                  icon: Icon(Icons.arrow_upward),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        children: [
+          // 1. I 3 Pulsanti rettangolari separati: [ In ]  [ Spesa ]  [ Trasferimento ]
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Row(
+              children: [
+                _TypeTabButton(
+                  label: 'In',
+                  isSelected: _selectedType == TransactionType.income,
+                  activeColor: provider.secondaryColor,
+                  onTap: () {
+                    setState(() {
+                      _selectedType = TransactionType.income;
+                      _resetCategorySelection(provider);
+                    });
+                  },
                 ),
-                ButtonSegment(
-                  value: TransactionType.income,
-                  label: Text('Entrata'),
-                  icon: Icon(Icons.arrow_downward),
+                const SizedBox(width: 10),
+                _TypeTabButton(
+                  label: 'Spesa',
+                  isSelected: _selectedType == TransactionType.expense,
+                  activeColor: const Color(0xFFFF6B6B),
+                  onTap: () {
+                    setState(() {
+                      _selectedType = TransactionType.expense;
+                      _resetCategorySelection(provider);
+                    });
+                  },
                 ),
-                ButtonSegment(
-                  value: TransactionType.transfer,
-                  label: Text('Trasferimento'),
-                  icon: Icon(Icons.swap_horiz),
+                const SizedBox(width: 10),
+                _TypeTabButton(
+                  label: 'Trasferimento',
+                  isSelected: _selectedType == TransactionType.transfer,
+                  activeColor: Theme.of(context).colorScheme.onSurface,
+                  onTap: () {
+                    setState(() {
+                      _selectedType = TransactionType.transfer;
+                    });
+                  },
                 ),
               ],
-              selected: {_selectedType},
-              onSelectionChanged: (newSelection) {
-                setState(() {
-                  _selectedType = newSelection.first;
-                  _resetCategorySelection(provider);
-                });
-              },
             ),
-            const SizedBox(height: 16),
+          ),
+          const SizedBox(height: 8),
 
-            // 2. Riga Data
-            InputDecorator(
-              decoration: const InputDecoration(
-                labelText: 'Data',
-                prefixIcon: Icon(Icons.calendar_today_outlined),
-                border: OutlineInputBorder(),
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton(
-                    onPressed: _pickDate,
-                    child: Text(
-                      '${AppFormatters.formatShortWeekday(_selectedDate)} ${AppFormatters.formatDate(_selectedDate)}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                  Row(
+          // 2. Blocco righe form in stile Money Manager (Etichetta a sinistra + Campo sottolineato a destra)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: [
+                // RIGA 1: Giorno
+                _MoneyManagerFormRow(
+                  label: 'Giorno',
+                  lineColor: subtleLineColor,
+                  child: Row(
                     children: [
-                      IconButton(
-                        tooltip: 'Giorno precedente',
-                        icon: const Icon(Icons.chevron_left),
-                        onPressed: () {
-                          setState(() {
-                            _selectedDate = _selectedDate
-                                .subtract(const Duration(days: 1));
-                          });
-                        },
+                      Expanded(
+                        child: InkWell(
+                          onTap: _pickDate,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                              dayString,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                      IconButton(
-                        tooltip: 'Giorno successivo',
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed: () {
+                      InkWell(
+                        onTap: () {
                           setState(() {
-                            _selectedDate =
-                                _selectedDate.add(const Duration(days: 1));
+                            _isRepeatEnabled = !_isRepeatEnabled;
                           });
                         },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 4,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.sync,
+                                size: 18,
+                                color: _isRepeatEnabled
+                                    ? activeTabColor
+                                    : Colors.grey,
+                              ),
+                              Text(
+                                'Ripeti',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: _isRepeatEnabled
+                                      ? activeTabColor
+                                      : Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
+                ),
 
-            // 3. Importo
-            TextFormField(
-              controller: _amountController,
-              autofocus: true,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              decoration: const InputDecoration(
-                labelText: 'Importo (€)',
-                prefixIcon: Icon(Icons.euro),
-                border: OutlineInputBorder(),
-              ),
-              validator: (val) {
-                if (val == null || val.trim().isEmpty) {
-                  return 'Inserisci un importo';
-                }
-                final parsed = double.tryParse(val.replaceAll(',', '.'));
-                if (parsed == null || parsed <= 0) {
-                  return 'Inserisci un valore valido maggiore di zero';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // 4. Nota / Descrizione con Auto-Suggerimento delle Note già scritte!
-            TextFormField(
-              controller: _noteController,
-              decoration: InputDecoration(
-                labelText: 'Nota / Descrizione (es. Spesa, Pizza, Benzina...)',
-                prefixIcon: const Icon(Icons.notes),
-                border: const OutlineInputBorder(),
-                suffixIcon: _currentNoteQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
-                        onPressed: () => _noteController.clear(),
-                      )
-                    : null,
-              ),
-            ),
-            if (matchingNotes.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.history, size: 14, color: Colors.grey),
-                  const SizedBox(width: 6),
-                  Text(
-                    _currentNoteQuery.isEmpty
-                        ? 'Note usate di recente (tocca per inserire):'
-                        : 'Suggerimenti dalle tue note:',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: matchingNotes.map((suggestion) {
-                  return ActionChip(
-                    visualDensity: VisualDensity.compact,
-                    avatar: const Icon(Icons.north_west, size: 14),
-                    label: Text(suggestion),
-                    onPressed: () {
-                      setState(() {
-                        _noteController.text = suggestion;
-                        _noteController.selection = TextSelection.fromPosition(
-                          TextPosition(offset: suggestion.length),
-                        );
-                      });
-                    },
-                  );
-                }).toList(),
-              ),
-            ],
-            const SizedBox(height: 16),
-
-            // 5. Scelta Conto + pulsante rapido "+ Nuovo Conto"
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: _selectedAccountId,
-                    decoration: InputDecoration(
-                      labelText: _selectedType == TransactionType.transfer
-                          ? 'Dal Conto (Origine)'
-                          : 'Conto',
-                      prefixIcon: const Icon(Icons.account_balance_wallet),
-                      border: const OutlineInputBorder(),
+                // RIGA 2: Importo
+                _MoneyManagerFormRow(
+                  label: 'Importo',
+                  lineColor: subtleLineColor,
+                  child: TextField(
+                    controller: _amountController,
+                    autofocus: true,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
                     ),
-                    items: provider.accounts
-                        .map((a) => DropdownMenuItem(
-                              value: a.id,
-                              child: Text(a.name),
-                            ))
-                        .toList(),
-                    onChanged: (val) =>
-                        setState(() => _selectedAccountId = val),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 12),
+                      suffixText: '€',
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                IconButton.filledTonal(
-                  tooltip: 'Crea Nuovo Conto',
-                  onPressed: () async {
-                    final created = await showAccountEditorDialog(context);
-                    if (created != null) {
-                      setState(() {
-                        _selectedAccountId = created.id;
-                      });
-                    }
-                  },
-                  icon: const Icon(Icons.add),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
 
-            // 6. Se è un Trasferimento mostra "Al Conto", altrimenti mostra la Griglia Categorie + Sottocategorie
-            if (_selectedType == TransactionType.transfer)
-              DropdownButtonFormField<String>(
-                value: _selectedToAccountId,
-                decoration: const InputDecoration(
-                  labelText: 'Al Conto (Destinazione)',
-                  prefixIcon: Icon(Icons.account_balance),
-                  border: OutlineInputBorder(),
-                ),
-                items: provider.accounts
-                    .map((a) => DropdownMenuItem(
-                          value: a.id,
-                          child: Text(a.name),
-                        ))
-                    .toList(),
-                onChanged: (val) =>
-                    setState(() => _selectedToAccountId = val),
-              )
-            else ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _selectedType == TransactionType.income
-                        ? 'CATEGORIA ENTRATA'
-                        : 'CATEGORIA USCITA',
-                    style: Theme.of(context).textTheme.labelLarge,
+                // RIGA 3: Categoria (oppure "Da" se è un Trasferimento)
+                if (_selectedType == TransactionType.transfer)
+                  _MoneyManagerFormRow(
+                    label: 'Da',
+                    lineColor: subtleLineColor,
+                    child: InkWell(
+                      onTap: () =>
+                          _showAccountPickerSheet(isDestination: false),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              selectedAccount?.name ?? 'Seleziona conto',
+                              style: const TextStyle(fontSize: 15),
+                            ),
+                            const Icon(
+                              Icons.keyboard_arrow_down,
+                              size: 18,
+                              color: Colors.grey,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  _MoneyManagerFormRow(
+                    label: 'Categoria',
+                    lineColor: subtleLineColor,
+                    child: InkWell(
+                      onTap: _showCategoryPickerSheet,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        child: Row(
+                          children: [
+                            if (selectedCategory != null) ...[
+                              Icon(
+                                selectedCategory.icon,
+                                size: 18,
+                                color: selectedCategory.color,
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                            Expanded(
+                              child: Text(
+                                categoryDisplay,
+                                style: const TextStyle(fontSize: 15),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.keyboard_arrow_down,
+                              size: 18,
+                              color: Colors.grey,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                  TextButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => CategoriesScreen(
-                            initialKind: currentKind,
+
+                // RIGA 4: Conto (oppure "A" se è un Trasferimento)
+                _MoneyManagerFormRow(
+                  label:
+                      _selectedType == TransactionType.transfer ? 'A' : 'Conto',
+                  lineColor: subtleLineColor,
+                  child: InkWell(
+                    onTap: () => _showAccountPickerSheet(
+                      isDestination: _selectedType == TransactionType.transfer,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            (_selectedType == TransactionType.transfer
+                                    ? selectedToAccount?.name
+                                    : selectedAccount?.name) ??
+                                'Seleziona conto',
+                            style: const TextStyle(fontSize: 15),
+                          ),
+                          const Icon(
+                            Icons.keyboard_arrow_down,
+                            size: 18,
+                            color: Colors.grey,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                // RIGA 5: Nota (con icona [!] a destra e suggerimenti automatici)
+                _MoneyManagerFormRow(
+                  label: 'Nota',
+                  lineColor: subtleLineColor,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _noteController,
+                          style: const TextStyle(fontSize: 15),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(vertical: 12),
                           ),
                         ),
-                      );
-                    },
-                    icon: const Icon(Icons.edit_note, size: 18),
-                    label: const Text('Modifica / Gestisci'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  ...availableCategories.map((cat) {
-                    final isSelected = cat.id == _selectedCategoryId;
-                    return ChoiceChip(
-                      avatar: Icon(
-                        cat.icon,
-                        size: 18,
-                        color: isSelected ? Colors.white : cat.color,
                       ),
-                      label: Text(cat.name),
-                      selected: isSelected,
-                      selectedColor: cat.color,
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : null,
-                        fontWeight:
-                            isSelected ? FontWeight.bold : FontWeight.normal,
+                      Container(
+                        width: 24,
+                        height: 24,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Colors.grey.withValues(alpha: 0.5),
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          '!',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
                       ),
-                      showCheckmark: false,
-                      onSelected: (_) {
-                        setState(() {
-                          _selectedCategoryId = cat.id;
-                          _selectedSubcategory = cat.subcategories.isNotEmpty
-                              ? cat.subcategories.first
-                              : null;
-                        });
-                      },
-                    );
-                  }),
-                  ActionChip(
-                    avatar: const Icon(Icons.add_circle_outline, size: 18),
-                    label: const Text('+ Nuova Categoria'),
-                    onPressed: () async {
-                      final created = await showCategoryEditorDialog(
-                        context,
-                        initialKind: currentKind,
-                      );
-                      if (created != null) {
-                        setState(() {
-                          if (created.kind == CategoryKind.income) {
-                            _selectedType = TransactionType.income;
-                          } else {
-                            _selectedType = TransactionType.expense;
-                          }
-                          _selectedCategoryId = created.id;
-                          _selectedSubcategory =
-                              created.subcategories.isNotEmpty
-                                  ? created.subcategories.first
-                                  : null;
-                        });
-                      }
-                    },
+                    ],
                   ),
-                ],
-              ),
-
-              // Sezione Sottocategorie
-              if (selectedCategory != null) ...[
-                const SizedBox(height: 16),
-                Text(
-                  'SOTTOCATEGORIA (${selectedCategory.name.toUpperCase()})',
-                  style: Theme.of(context).textTheme.labelMedium,
                 ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
+
+                // Suggerimenti automatici delle Note già scritte
+                if (matchingNotes.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: matchingNotes.map((suggestion) {
+                        return ActionChip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(
+                            suggestion,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _noteController.text = suggestion;
+                              _noteController.selection =
+                                  TextSelection.fromPosition(
+                                TextPosition(offset: suggestion.length),
+                              );
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+          Divider(
+            thickness: 6,
+            color: Theme.of(context)
+                .colorScheme
+                .surfaceContainerHighest
+                .withValues(alpha: 0.5),
+          ),
+          const SizedBox(height: 12),
+
+          // 3. Sezione inferiore: "+ Etichetta" e "Descrizione" con icona fotocamera (come nella 3a immagine)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkWell(
+                  onTap: _promptTagDialog,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.add, size: 15, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Text(
+                          _selectedTag != null && _selectedTag!.isNotEmpty
+                              ? '#$_selectedTag'
+                              : 'Etichetta',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: subtleLineColor, width: 1),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _descriptionController,
+                          style: const TextStyle(fontSize: 15),
+                          decoration: const InputDecoration(
+                            hintText: 'Descrizione',
+                            hintStyle: TextStyle(color: Colors.grey),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.camera_alt_outlined,
+                        color: Colors.grey,
+                        size: 22,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 28),
+
+                // 4. I 2 Pulsanti in basso affiancati: [ Salva ] (70%) e [ Continua ] (30%)
+                Row(
                   children: [
-                    ...selectedCategory.subcategories.map((sub) {
-                      final isSubSelected = sub == _selectedSubcategory;
-                      return ChoiceChip(
-                        label: Text(sub),
-                        selected: isSubSelected,
-                        onSelected: (_) {
-                          setState(() {
-                            _selectedSubcategory = sub;
-                          });
-                        },
-                      );
-                    }),
-                    ActionChip(
-                      avatar: const Icon(Icons.add, size: 16),
-                      label: const Text('+ Sottocategoria'),
-                      onPressed: () =>
-                          _promptNewSubcategory(selectedCategory),
+                    Expanded(
+                      flex: 7,
+                      child: SizedBox(
+                        height: 48,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor:
+                                _selectedType == TransactionType.income
+                                    ? provider.secondaryColor
+                                    : const Color(0xFFFF6B6B),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: () => _saveTransaction(closeOnSave: true),
+                          child: const Text(
+                            'Salva',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 3,
+                      child: SizedBox(
+                        height: 48,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor:
+                                Theme.of(context).colorScheme.onSurface,
+                            side: BorderSide(
+                              color: Colors.grey.withValues(alpha: 0.45),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: () => _saveTransaction(closeOnSave: false),
+                          child: const Text(
+                            'Continua',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ],
-            ],
-            const SizedBox(height: 24),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-            FilledButton.icon(
-              onPressed: _submit,
-              icon: const Icon(Icons.check),
-              label: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 14),
-                child: Text('Salva Movimento', style: TextStyle(fontSize: 16)),
+class _TypeTabButton extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final Color activeColor;
+  final VoidCallback onTap;
+
+  const _TypeTabButton({
+    required this.label,
+    required this.isSelected,
+    required this.activeColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor = Theme.of(context)
+        .colorScheme
+        .surfaceContainerHighest
+        .withValues(alpha: 0.45);
+
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          height: 38,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected
+                  ? activeColor
+                  : Colors.grey.withValues(alpha: 0.2),
+              width: isSelected ? 1.5 : 1.0,
+            ),
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              color: isSelected ? activeColor : Colors.grey,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MoneyManagerFormRow extends StatelessWidget {
+  final String label;
+  final Widget child;
+  final Color lineColor;
+
+  const _MoneyManagerFormRow({
+    required this.label,
+    required this.child,
+    required this.lineColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 86,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.grey,
+                fontSize: 14.5,
               ),
             ),
-          ],
-        ),
+          ),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: lineColor, width: 1),
+                ),
+              ),
+              child: child,
+            ),
+          ),
+        ],
       ),
     );
   }
