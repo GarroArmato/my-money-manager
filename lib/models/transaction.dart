@@ -18,10 +18,11 @@ class MoneyTransaction {
   final String accountId;
   final String? toAccountId; // Usato solo se type == TransactionType.transfer
   final String? categoryId;  // Null se è un trasferimento
+  final String? subcategory; // Sottocategoria (es. Assicurazione, Multa, Bollo...)
   final String note;
   final String? merchantName;
   final TransactionSource source;
-  final String? deduplicationKey; // Evita di importare due volte la stessa riga CSV
+  final String? deduplicationKey;
 
   MoneyTransaction({
     required this.id,
@@ -31,6 +32,7 @@ class MoneyTransaction {
     required this.accountId,
     this.toAccountId,
     this.categoryId,
+    this.subcategory,
     this.note = '',
     this.merchantName,
     this.source = TransactionSource.manual,
@@ -46,6 +48,7 @@ class MoneyTransaction {
       'accountId': accountId,
       'toAccountId': toAccountId,
       'categoryId': categoryId,
+      'subcategory': subcategory,
       'note': note,
       'merchantName': merchantName,
       'source': source.name,
@@ -65,6 +68,7 @@ class MoneyTransaction {
       accountId: map['accountId'] as String,
       toAccountId: map['toAccountId'] as String?,
       categoryId: map['categoryId'] as String?,
+      subcategory: map['subcategory'] as String?,
       note: map['note'] as String? ?? '',
       merchantName: map['merchantName'] as String?,
       source: TransactionSource.values.firstWhere(

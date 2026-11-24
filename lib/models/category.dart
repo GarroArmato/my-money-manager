@@ -11,6 +11,7 @@ class TransactionCategory {
   final CategoryKind kind;
   final String iconKey;
   final int colorValue;
+  final List<String> subcategories;
 
   const TransactionCategory({
     required this.id,
@@ -18,10 +19,29 @@ class TransactionCategory {
     required this.kind,
     required this.iconKey,
     required this.colorValue,
+    this.subcategories = const [],
   });
 
   IconData get icon => availableIcons[iconKey] ?? Icons.category;
   Color get color => Color(colorValue);
+
+  TransactionCategory copyWith({
+    String? id,
+    String? name,
+    CategoryKind? kind,
+    String? iconKey,
+    int? colorValue,
+    List<String>? subcategories,
+  }) {
+    return TransactionCategory(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      kind: kind ?? this.kind,
+      iconKey: iconKey ?? this.iconKey,
+      colorValue: colorValue ?? this.colorValue,
+      subcategories: subcategories ?? this.subcategories,
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -30,6 +50,7 @@ class TransactionCategory {
       'kind': kind.name,
       'iconKey': iconKey,
       'colorValue': colorValue,
+      'subcategories': subcategories,
     };
   }
 
@@ -43,6 +64,10 @@ class TransactionCategory {
       ),
       iconKey: map['iconKey'] as String? ?? 'category',
       colorValue: map['colorValue'] as int? ?? 0xFF00796B,
+      subcategories: (map['subcategories'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
     );
   }
 
@@ -92,13 +117,20 @@ class TransactionCategory {
   ];
 
   static const List<TransactionCategory> defaultCategories = [
-    // --- USCITE PREDEFINITE (stile Money Manager) ---
+    // --- USCITE PREDEFINITE (con Sottocategorie stile Money Manager) ---
     TransactionCategory(
       id: 'cat_food',
       name: 'Alimentari',
       kind: CategoryKind.expense,
       iconKey: 'shopping_cart',
       colorValue: 0xFFE53935,
+      subcategories: [
+        'Supermercato',
+        'Frutta & Verdura',
+        'Forno & Pane',
+        'macelleria',
+        'Altro',
+      ],
     ),
     TransactionCategory(
       id: 'cat_restaurant',
@@ -106,13 +138,31 @@ class TransactionCategory {
       kind: CategoryKind.expense,
       iconKey: 'restaurant',
       colorValue: 0xFFFB8C00,
+      subcategories: [
+        'Ristorante / Pizzeria',
+        'Colazione & Bar',
+        'Delivery (Glovo/Deliveroo)',
+        'Aperitivo',
+        'Altro',
+      ],
     ),
     TransactionCategory(
       id: 'cat_transport',
-      name: 'Trasporti & Auto',
+      name: 'Macchina & Trasporti',
       kind: CategoryKind.expense,
       iconKey: 'directions_car',
       colorValue: 0xFF1E88E5,
+      subcategories: [
+        'Carburante',
+        'Assicurazione',
+        'Multa',
+        'Parcheggio',
+        'Rate',
+        'Bollo',
+        'Revisione',
+        'Mezzi Pubblici',
+        'Altro',
+      ],
     ),
     TransactionCategory(
       id: 'cat_home',
@@ -120,6 +170,14 @@ class TransactionCategory {
       kind: CategoryKind.expense,
       iconKey: 'home',
       colorValue: 0xFF8E24AA,
+      subcategories: [
+        'Affitto / Mutuo',
+        'Luce & Gas',
+        'Internet & Telefono',
+        'Condominio',
+        'Manutenzione',
+        'Altro',
+      ],
     ),
     TransactionCategory(
       id: 'cat_entertainment',
@@ -127,6 +185,13 @@ class TransactionCategory {
       kind: CategoryKind.expense,
       iconKey: 'movie',
       colorValue: 0xFF00ACC1,
+      subcategories: [
+        'Abbonamenti (Netflix/Spotify)',
+        'Cinema & Concerti',
+        'Viaggi & Vacanze',
+        'Hobby & Giochi',
+        'Altro',
+      ],
     ),
     TransactionCategory(
       id: 'cat_shopping',
@@ -134,6 +199,13 @@ class TransactionCategory {
       kind: CategoryKind.expense,
       iconKey: 'shopping_bag',
       colorValue: 0xFFD81B60,
+      subcategories: [
+        'Abbigliamento',
+        'Scarpe & Accessori',
+        'Elettronica',
+        'Regali',
+        'Altro',
+      ],
     ),
     TransactionCategory(
       id: 'cat_health',
@@ -141,14 +213,27 @@ class TransactionCategory {
       kind: CategoryKind.expense,
       iconKey: 'medical_services',
       colorValue: 0xFF00897B,
+      subcategories: [
+        'Farmacia',
+        'Visite Mediche',
+        'Palestra & Sport',
+        'Cura Persona',
+        'Altro',
+      ],
     ),
-    // --- ENTRATE PREDEFINITE (stile Money Manager) ---
+    // --- ENTRATE PREDEFINITE ---
     TransactionCategory(
       id: 'cat_salary',
       name: 'Stipendio',
       kind: CategoryKind.income,
       iconKey: 'account_balance_wallet',
       colorValue: 0xFF43A047,
+      subcategories: [
+        'Stipendio Base',
+        'Straordinari',
+        'Tredicesima / Quattordicesima',
+        'Altro',
+      ],
     ),
     TransactionCategory(
       id: 'cat_bonus',
@@ -156,6 +241,12 @@ class TransactionCategory {
       kind: CategoryKind.income,
       iconKey: 'card_giftcard',
       colorValue: 0xFF039BE5,
+      subcategories: [
+        'Bonus Aziendale',
+        'Regalo',
+        'Rimborso',
+        'Altro',
+      ],
     ),
     TransactionCategory(
       id: 'cat_other_income',
@@ -163,6 +254,12 @@ class TransactionCategory {
       kind: CategoryKind.income,
       iconKey: 'trending_up',
       colorValue: 0xFF00897B,
+      subcategories: [
+        'Vendite Usato',
+        'Interessi & Dividendi',
+        'Freelance',
+        'Altro',
+      ],
     ),
   ];
 }

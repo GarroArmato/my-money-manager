@@ -29,6 +29,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   String? _selectedAccountId;
   String? _selectedToAccountId;
   String? _selectedCategoryId;
+  String? _selectedSubcategory;
   bool _initialized = false;
 
   @override
@@ -44,9 +45,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           _selectedAccountId = provider.accounts.first.id;
         }
         if (provider.accounts.length > 1) {
-          final other = provider.accounts
-              .firstWhere((a) => a.id != _selectedAccountId,
-                  orElse: () => provider.accounts.first);
+          final other = provider.accounts.firstWhere(
+            (a) => a.id != _selectedAccountId,
+            orElse: () => provider.accounts.first,
+          );
           _selectedToAccountId = other.id;
         }
       }
@@ -65,6 +67,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           !matching.any((c) => c.id == _selectedCategoryId)) {
         _selectedCategoryId = matching.first.id;
       }
+      final cat = provider.getCategoryById(_selectedCategoryId);
+      _selectedSubcategory =
+          (cat != null && cat.subcategories.isNotEmpty)
+              ? cat.subcategories.first
+              : null;
     }
   }
 
@@ -95,6 +102,55 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
   }
 
+  Future<void> _promptNewSubcategory(TransactionCategory category) async {
+    final controller = TextEditingController();
+    final created = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('Nuova Sottocategoria in ${category.name}'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Nome Sottocategoria (es. Assicurazione, Bollo...)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Annulla'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                final text = controller.text.trim();
+                if (text.isEmpty) return;
+                Navigator.of(dialogContext).pop(text);
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Aggiungi'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (created != null && mounted) {
+      final provider = MoneyScope.read(context);
+      if (!category.subcategories.contains(created)) {
+        await provider.saveCategory(
+          category.copyWith(
+            subcategories: [...category.subcategories, created],
+          ),
+        );
+      }
+      setState(() {
+        _selectedSubcategory = created;
+      });
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedAccountId == null) return;
@@ -114,6 +170,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       categoryId: _selectedType == TransactionType.transfer
           ? null
           : _selectedCategoryId,
+      subcategory: _selectedType == TransactionType.transfer
+          ? null
+          : _selectedSubcategory,
       note: _noteController.text.trim(),
     );
 
@@ -135,6 +194,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         !availableCategories.any((c) => c.id == _selectedCategoryId)) {
       _selectedCategoryId = availableCategories.first.id;
     }
+
+    final selectedCategory = provider.getCategoryById(_selectedCategoryId);
 
     return Scaffold(
       appBar: AppBar(
@@ -174,7 +235,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             ),
             const SizedBox(height: 16),
 
-            // 2. Riga Data (con frecce giorno prima/dopo e calendario in stile Money Manager)
+            // 2. Riga Data
             InputDecorator(
               decoration: const InputDecoration(
                 labelText: 'Data',
@@ -290,7 +351,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             ),
             const SizedBox(height: 16),
 
-            // 5. Se è un Trasferimento mostra "Al Conto", altrimenti mostra la Griglia Categorie in stile Money Manager
+            // 5. Se è un Trasferimento mostra "Al Conto", altrimenti mostra la Griglia Categorie + Sottocategorie
             if (_selectedType == TransactionType.transfer)
               DropdownButtonFormField<String>(
                 value: _selectedToAccountId,
@@ -358,6 +419,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       onSelected: (_) {
                         setState(() {
                           _selectedCategoryId = cat.id;
+                          _selectedSubcategory = cat.subcategories.isNotEmpty
+                              ? cat.subcategories.first
+                              : null;
                         });
                       },
                     );
@@ -378,12 +442,50 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                             _selectedType = TransactionType.expense;
                           }
                           _selectedCategoryId = created.id;
+                          _selectedSubcategory =
+                              created.subcategories.isNotEmpty
+                                  ? created.subcategories.first
+                                  : null;
                         });
                       }
                     },
                   ),
                 ],
               ),
+
+              // Sezione Sottocategorie (es. Assicurazione, Multa, Parcheggio, Bollo...)
+              if (selectedCategory != null) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'SOTTOCATEGORIA (${selectedCategory.name.toUpperCase()})',
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    ...selectedCategory.subcategories.map((sub) {
+                      final isSubSelected = sub == _selectedSubcategory;
+                      return ChoiceChip(
+                        label: Text(sub),
+                        selected: isSubSelected,
+                        onSelected: (_) {
+                          setState(() {
+                            _selectedSubcategory = sub;
+                          });
+                        },
+                      );
+                    }),
+                    ActionChip(
+                      avatar: const Icon(Icons.add, size: 16),
+                      label: const Text('+ Sottocategoria'),
+                      onPressed: () =>
+                          _promptNewSubcategory(selectedCategory),
+                    ),
+                  ],
+                ),
+              ],
             ],
             const SizedBox(height: 18),
 
@@ -391,7 +493,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             TextFormField(
               controller: _noteController,
               decoration: const InputDecoration(
-                labelText: 'Nota / Descrizione (es. Spesa settimanale)',
+                labelText: 'Nota / Descrizione (opzionale)',
                 prefixIcon: Icon(Icons.notes),
                 border: OutlineInputBorder(),
               ),

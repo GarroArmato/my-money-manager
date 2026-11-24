@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../utils/formatters.dart';
 import '../utils/money_scope.dart';
+import 'category_stats_detail_screen.dart';
 
 class _CategoryStatItem {
   final String categoryId;
@@ -28,11 +29,9 @@ class StatsScreen extends StatefulWidget {
 }
 
 class _StatsScreenState extends State<StatsScreen> {
-  // Default: mostra tab "Spese" (come nello screenshot), ma cliccabile anche su "In" (Entrate)
   TransactionType _selectedTab = TransactionType.expense;
   bool _isYearly = false; // M = Mensile, A = Annuale
 
-  // Tavolozza vivace in stile Money Manager per distinguere chiaramente le fette della torta
   static const List<Color> _chartPalette = [
     Color(0xFFFF6B6B), // Rosso corallo (es. 30%)
     Color(0xFFFF9F43), // Arancione (es. 16%)
@@ -316,7 +315,7 @@ class _StatsScreenState extends State<StatsScreen> {
               ],
             ),
 
-            // 4. Grafico a Torta con etichette esterne + Lista percentuali in basso
+            // 4. Grafico a Torta con etichette esterne + Lista percentuali cliccabile in basso
             Expanded(
               child: items.isEmpty
                   ? Center(
@@ -338,14 +337,12 @@ class _StatsScreenState extends State<StatsScreen> {
                               items: items,
                               textColor:
                                   Theme.of(context).colorScheme.onSurface,
-                              dividerColor:
-                                  Theme.of(context).scaffoldBackgroundColor,
                             ),
                           ),
                         ),
                         const Divider(height: 1),
 
-                        // Lista Categorie con badge percentuale colorato e importo
+                        // Lista Categorie cliccabile (apre il Dettaglio Categoria con grafico lineare!)
                         Expanded(
                           child: ListView.separated(
                             padding: const EdgeInsets.only(bottom: 88),
@@ -357,55 +354,70 @@ class _StatsScreenState extends State<StatsScreen> {
                               final roundedPct =
                                   (item.percentage * 100).round();
 
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 12,
-                                ),
-                                child: Row(
-                                  children: [
-                                    // Badge percentuale colorato (es. [30%], [16%])
-                                    Container(
-                                      width: 48,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 5,
-                                      ),
-                                      alignment: Alignment.center,
-                                      decoration: BoxDecoration(
-                                        color: item.color,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        '$roundedPct%',
-                                        style: const TextStyle(
-                                          color: Colors.black87,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
-                                        ),
+                              return InkWell(
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => CategoryStatsDetailScreen(
+                                        categoryId: item.categoryId,
+                                        transactionType: _selectedTab,
+                                        accentColor: item.color,
                                       ),
                                     ),
-                                    const SizedBox(width: 14),
+                                  );
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      // Badge percentuale colorato (es. [30%], [16%])
+                                      Container(
+                                        width: 48,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 5,
+                                        ),
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: item.color,
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          '$roundedPct%',
+                                          style: const TextStyle(
+                                            color: Colors.black87,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 14),
 
-                                    // Nome Categoria
-                                    Expanded(
-                                      child: Text(
-                                        item.name,
+                                      // Nome Categoria
+                                      Expanded(
+                                        child: Text(
+                                          item.name,
+                                          style: const TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+
+                                      // Importo formattato
+                                      Text(
+                                        AppFormatters.formatCurrency(
+                                            item.amount),
                                         style: const TextStyle(
                                           fontSize: 15,
-                                          fontWeight: FontWeight.w500,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                    ),
-
-                                    // Importo formattato
-                                    Text(
-                                      AppFormatters.formatCurrency(item.amount),
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               );
                             },
@@ -425,12 +437,10 @@ class _StatsScreenState extends State<StatsScreen> {
 class _MoneyManagerPieChartPainter extends CustomPainter {
   final List<_CategoryStatItem> items;
   final Color textColor;
-  final Color dividerColor;
 
   _MoneyManagerPieChartPainter({
     required this.items,
     required this.textColor,
-    required this.dividerColor,
   });
 
   @override
@@ -447,7 +457,6 @@ class _MoneyManagerPieChartPainter extends CustomPainter {
       ..color = Colors.black87
       ..strokeWidth = 1.4;
 
-    // Parte dall'alto (-90 gradi = -pi/2) e procede in senso orario come nello screenshot
     double startAngle = -math.pi / 2;
 
     for (int i = 0; i < items.length; i++) {
@@ -457,9 +466,13 @@ class _MoneyManagerPieChartPainter extends CustomPainter {
 
       fillPaint.color = item.color;
       canvas.drawArc(rect, startAngle, sweepAngle, true, fillPaint);
-      canvas.drawArc(rect, startAngle, sweepAngle, true, borderPaint);
+      // Se c'è una sola categoria al 100%, disegna solo il bordo circolare esterno senza il raggio interno
+      if (items.length == 1) {
+        canvas.drawCircle(center, radius, borderPaint);
+      } else {
+        canvas.drawArc(rect, startAngle, sweepAngle, true, borderPaint);
+      }
 
-      // Disegna la linea guida esterna e l'etichetta per le prime 8 categorie (o fette >= 1.2%)
       if (i < 8 && item.percentage >= 0.012) {
         final midAngle = startAngle + (sweepAngle / 2);
         final cosA = math.cos(midAngle);
@@ -490,7 +503,6 @@ class _MoneyManagerPieChartPainter extends CustomPainter {
           ..lineTo(p3.dx, p3.dy);
         canvas.drawPath(path, linePaint);
 
-        // Tronca i nomi troppo lunghi come fa Money Manager ("Divertimen...")
         final shortName = item.name.length > 12
             ? '${item.name.substring(0, 10)}...'
             : item.name;

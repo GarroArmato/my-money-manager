@@ -3,7 +3,7 @@ import '../models/category.dart';
 import '../utils/formatters.dart';
 import '../utils/money_scope.dart';
 
-/// Mostra il dialog modale per Creare o Modificare una Categoria (di Uscita o di Entrata)
+/// Mostra il dialog modale per Creare o Modificare una Categoria (e le sue Sottocategorie)
 Future<TransactionCategory?> showCategoryEditorDialog(
   BuildContext context, {
   CategoryKind initialKind = CategoryKind.expense,
@@ -12,11 +12,15 @@ Future<TransactionCategory?> showCategoryEditorDialog(
   final nameController = TextEditingController(
     text: existingCategory?.name ?? '',
   );
+  final subController = TextEditingController();
   CategoryKind selectedKind = existingCategory?.kind ?? initialKind;
   String selectedIconKey =
       existingCategory?.iconKey ?? TransactionCategory.availableIcons.keys.first;
   int selectedColorValue = existingCategory?.colorValue ??
       (selectedKind == CategoryKind.income ? 0xFF43A047 : 0xFFE53935);
+  final List<String> subcategories = List<String>.from(
+    existingCategory?.subcategories ?? ['Altro'],
+  );
 
   return showDialog<TransactionCategory>(
     context: context,
@@ -30,7 +34,7 @@ Future<TransactionCategory?> showCategoryEditorDialog(
                   : 'Modifica Categoria',
             ),
             content: SizedBox(
-              width: 440,
+              width: 450,
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -62,9 +66,9 @@ Future<TransactionCategory?> showCategoryEditorDialog(
                     // Nome Categoria
                     TextField(
                       controller: nameController,
-                      autofocus: true,
+                      autofocus: existingCategory == null,
                       decoration: InputDecoration(
-                        labelText: 'Nome Categoria (es. Palestra, Bonus...)',
+                        labelText: 'Nome Categoria (es. Macchina, Cibo...)',
                         border: const OutlineInputBorder(),
                         prefixIcon: Icon(
                           TransactionCategory.availableIcons[selectedIconKey] ??
@@ -72,6 +76,71 @@ Future<TransactionCategory?> showCategoryEditorDialog(
                           color: Color(selectedColorValue),
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Sottocategorie (es. Assicurazione, Multa, Parcheggio, Bollo...)
+                    const Text(
+                      'Sottocategorie (visibili nel dettaglio statistiche)',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: subcategories.map((sub) {
+                        return InputChip(
+                          label: Text(sub),
+                          onDeleted: subcategories.length > 1
+                              ? () {
+                                  setDialogState(() {
+                                    subcategories.remove(sub);
+                                  });
+                                }
+                              : null,
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: subController,
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              labelText:
+                                  'Aggiungi sottocategoria (es. Assicurazione)',
+                              border: OutlineInputBorder(),
+                            ),
+                            onSubmitted: (val) {
+                              final t = val.trim();
+                              if (t.isNotEmpty && !subcategories.contains(t)) {
+                                setDialogState(() {
+                                  subcategories.add(t);
+                                  subController.clear();
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filledTonal(
+                          onPressed: () {
+                            final t = subController.text.trim();
+                            if (t.isNotEmpty && !subcategories.contains(t)) {
+                              setDialogState(() {
+                                subcategories.add(t);
+                                subController.clear();
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.add),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
 
@@ -194,6 +263,7 @@ Future<TransactionCategory?> showCategoryEditorDialog(
                     kind: selectedKind,
                     iconKey: selectedIconKey,
                     colorValue: selectedColorValue,
+                    subcategories: subcategories,
                   );
 
                   await MoneyScope.read(context).saveCategory(newCat);
@@ -304,11 +374,19 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     cat.name,
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
+                  subtitle: cat.subcategories.isNotEmpty
+                      ? Text(
+                          cat.subcategories.join(', '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12),
+                        )
+                      : null,
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        tooltip: 'Modifica categoria',
+                        tooltip: 'Modifica categoria e sottocategorie',
                         icon: const Icon(Icons.edit_outlined),
                         onPressed: () {
                           showCategoryEditorDialog(
