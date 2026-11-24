@@ -2,7 +2,7 @@ import '../models/account.dart';
 import '../models/category.dart';
 import '../models/transaction.dart';
 
-/// Gestisce lo storage locale multipiattaforma per Gruppi di Conti, Conti, Categorie, Movimenti, Colori e Impostazioni
+/// Gestisce lo storage locale multipiattaforma per Gruppi di Conti, Conti, Categorie, Budget, Movimenti, Colori e Impostazioni
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
 
@@ -54,9 +54,29 @@ class DatabaseHelper {
     TransactionCategory.defaultCategories,
   );
 
+  // Budget mensili per categoria (categoryId -> importo limite €)
+  final Map<String, double> _categoryBudgets = {
+    'cat_food': 350.00,
+    'cat_restaurant': 150.00,
+    'cat_transport': 250.00,
+    'cat_entertainment': 100.00,
+  };
+
   final List<MoneyTransaction> _transactions = [];
 
   DatabaseHelper._init();
+
+  // --- BUDGET MENSILI PER CATEGORIA ---
+  Future<Map<String, double>> getCategoryBudgets() async =>
+      Map<String, double>.unmodifiable(_categoryBudgets);
+
+  Future<void> setCategoryBudget(String categoryId, double amount) async {
+    if (amount <= 0) {
+      _categoryBudgets.remove(categoryId);
+    } else {
+      _categoryBudgets[categoryId] = amount;
+    }
+  }
 
   // --- COLORI E TEMA DELL'APP (DEFAULT: VIOLA & VERDE) ---
   Future<int> getPrimaryColorValue() async => _primaryColorValue;
@@ -156,6 +176,7 @@ class DatabaseHelper {
 
   Future<void> deleteCategory(String categoryId) async {
     _categories.removeWhere((c) => c.id == categoryId);
+    _categoryBudgets.remove(categoryId);
   }
 
   // --- CRUD TRANSACTIONS (MOVIMENTI) ---

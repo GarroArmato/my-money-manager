@@ -4,6 +4,7 @@ import '../models/transaction.dart';
 import '../providers/money_provider.dart';
 import '../utils/formatters.dart';
 import '../utils/money_scope.dart';
+import '../widgets/app_top_bar.dart';
 import 'accounts_screen.dart';
 import 'categories_screen.dart';
 
@@ -30,7 +31,20 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   String? _selectedToAccountId;
   String? _selectedCategoryId;
   String? _selectedSubcategory;
+  String _currentNoteQuery = '';
   bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _noteController.addListener(() {
+      if (mounted) {
+        setState(() {
+          _currentNoteQuery = _noteController.text.trim();
+        });
+      }
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -197,16 +211,26 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
     final selectedCategory = provider.getCategoryById(_selectedCategoryId);
 
+    // Filtra i suggerimenti di note già scritte in precedenza dall'utente
+    final allSavedNotes = provider.suggestedNotes;
+    final matchingNotes = allSavedNotes.where((n) {
+      if (_currentNoteQuery.isEmpty) return true;
+      final lowerN = n.toLowerCase();
+      final lowerQ = _currentNoteQuery.toLowerCase();
+      return lowerN.contains(lowerQ) && lowerN != lowerQ;
+    }).take(8).toList();
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nuovo Movimento'),
+      appBar: const AppTopBar(
+        title: 'Nuovo Movimento',
+        icon: Icons.add_card_outlined,
       ),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // 1. Selettore Tipo (Uscita / Entrata / Trasferimento) in stile Money Manager
+            // 1. Selettore Tipo (Uscita / Entrata / Trasferimento)
             SegmentedButton<TransactionType>(
               segments: const [
                 ButtonSegment(
@@ -311,7 +335,59 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             ),
             const SizedBox(height: 16),
 
-            // 4. Scelta Conto + pulsante rapido "+ Nuovo Conto"
+            // 4. Nota / Descrizione con Auto-Suggerimento delle Note già scritte!
+            TextFormField(
+              controller: _noteController,
+              decoration: InputDecoration(
+                labelText: 'Nota / Descrizione (es. Spesa, Pizza, Benzina...)',
+                prefixIcon: const Icon(Icons.notes),
+                border: const OutlineInputBorder(),
+                suffixIcon: _currentNoteQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () => _noteController.clear(),
+                      )
+                    : null,
+              ),
+            ),
+            if (matchingNotes.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.history, size: 14, color: Colors.grey),
+                  const SizedBox(width: 6),
+                  Text(
+                    _currentNoteQuery.isEmpty
+                        ? 'Note usate di recente (tocca per inserire):'
+                        : 'Suggerimenti dalle tue note:',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: matchingNotes.map((suggestion) {
+                  return ActionChip(
+                    visualDensity: VisualDensity.compact,
+                    avatar: const Icon(Icons.north_west, size: 14),
+                    label: Text(suggestion),
+                    onPressed: () {
+                      setState(() {
+                        _noteController.text = suggestion;
+                        _noteController.selection = TextSelection.fromPosition(
+                          TextPosition(offset: suggestion.length),
+                        );
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
+            const SizedBox(height: 16),
+
+            // 5. Scelta Conto + pulsante rapido "+ Nuovo Conto"
             Row(
               children: [
                 Expanded(
@@ -351,7 +427,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             ),
             const SizedBox(height: 16),
 
-            // 5. Se è un Trasferimento mostra "Al Conto", altrimenti mostra la Griglia Categorie + Sottocategorie
+            // 6. Se è un Trasferimento mostra "Al Conto", altrimenti mostra la Griglia Categorie + Sottocategorie
             if (_selectedType == TransactionType.transfer)
               DropdownButtonFormField<String>(
                 value: _selectedToAccountId,
@@ -453,7 +529,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 ],
               ),
 
-              // Sezione Sottocategorie (es. Assicurazione, Multa, Parcheggio, Bollo...)
+              // Sezione Sottocategorie
               if (selectedCategory != null) ...[
                 const SizedBox(height: 16),
                 Text(
@@ -487,17 +563,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 ),
               ],
             ],
-            const SizedBox(height: 18),
-
-            // 6. Nota / Descrizione
-            TextFormField(
-              controller: _noteController,
-              decoration: const InputDecoration(
-                labelText: 'Nota / Descrizione (opzionale)',
-                prefixIcon: Icon(Icons.notes),
-                border: OutlineInputBorder(),
-              ),
-            ),
             const SizedBox(height: 24),
 
             FilledButton.icon(

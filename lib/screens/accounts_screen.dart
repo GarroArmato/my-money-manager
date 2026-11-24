@@ -3,6 +3,7 @@ import '../models/account.dart';
 import '../services/csv_import_service.dart';
 import '../utils/formatters.dart';
 import '../utils/money_scope.dart';
+import '../widgets/app_top_bar.dart';
 import 'account_detail_screen.dart';
 
 /// Mostra il dialog per Creare o Modificare un Gruppo di Conti (es. Contanti, Conti Bancari, Crypto, Buoni Pasto...)
@@ -405,21 +406,29 @@ class AccountsScreen extends StatelessWidget {
     final provider = MoneyScope.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Conti & Gruppi'),
+      appBar: AppTopBar(
+        title: 'Conti & Gruppi',
+        icon: Icons.account_balance_outlined,
         actions: [
           TextButton.icon(
             onPressed: () => showAccountGroupEditorDialog(context),
-            icon: const Icon(Icons.create_new_folder_outlined, size: 18),
-            label: const Text('+ Gruppo'),
+            icon: const Icon(
+              Icons.create_new_folder_outlined,
+              size: 16,
+              color: Colors.white,
+            ),
+            label: const Text(
+              '+ Gruppo',
+              style: TextStyle(color: Colors.white, fontSize: 12),
+            ),
           ),
           const SizedBox(width: 4),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: FilledButton.tonalIcon(
               onPressed: () => showAccountEditorDialog(context),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('+ Conto'),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('+ Conto', style: TextStyle(fontSize: 12)),
             ),
           ),
         ],

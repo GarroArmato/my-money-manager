@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/category.dart';
 import '../services/notification_reader_service.dart';
 import '../utils/money_scope.dart';
+import '../widgets/app_top_bar.dart';
 import 'accounts_screen.dart';
 import 'categories_screen.dart';
 import 'theme_customization_screen.dart';
@@ -109,8 +110,9 @@ class SettingsScreen extends StatelessWidget {
     final provider = MoneyScope.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Impostazioni'),
+      appBar: const AppTopBar(
+        title: 'Impostazioni',
+        icon: Icons.tune_outlined,
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),

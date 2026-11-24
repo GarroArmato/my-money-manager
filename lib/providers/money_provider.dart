@@ -15,6 +15,7 @@ class MoneyProvider extends ChangeNotifier {
   List<AccountGroup> _accountGroups = [];
   List<Account> _accounts = [];
   List<TransactionCategory> _categories = [];
+  Map<String, double> _categoryBudgets = {};
   List<MoneyTransaction> _transactions = [];
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   bool _isLoading = false;
@@ -36,6 +37,7 @@ class MoneyProvider extends ChangeNotifier {
       _categories.where((c) => c.kind == CategoryKind.expense).toList();
   List<TransactionCategory> get incomeCategories =>
       _categories.where((c) => c.kind == CategoryKind.income).toList();
+  Map<String, double> get categoryBudgets => _categoryBudgets;
   List<MoneyTransaction> get allTransactions => _transactions;
   DateTime get selectedMonth => _selectedMonth;
   bool get isLoading => _isLoading;
@@ -50,7 +52,26 @@ class MoneyProvider extends ChangeNotifier {
   Color get expenseColor => Color(_expenseColorValue);
   ThemeMode get themeMode => _themeMode;
 
-  /// Inizializza e carica gruppi di conti, conti, categorie, movimenti, colori e impostazioni
+  /// Restituisce l'elenco delle note già scritte nei movimenti (ordinate per frequenza/recentezza) per l'autocompletamento
+  List<String> get suggestedNotes {
+    final Map<String, int> counts = {};
+    final Map<String, String> originalCase = {};
+
+    for (final tx in _transactions) {
+      final trimmed = tx.note.trim();
+      if (trimmed.isEmpty) continue;
+      final lower = trimmed.toLowerCase();
+      counts[lower] = (counts[lower] ?? 0) + 1;
+      originalCase.putIfAbsent(lower, () => trimmed);
+    }
+
+    final sortedKeys = counts.keys.toList()
+      ..sort((a, b) => counts[b]!.compareTo(counts[a]!));
+
+    return sortedKeys.map((k) => originalCase[k]!).toList();
+  }
+
+  /// Inizializza e carica gruppi di conti, conti, categorie, budget, movimenti, colori e impostazioni
   Future<void> loadData() async {
     _isLoading = true;
     notifyListeners();
@@ -58,6 +79,7 @@ class MoneyProvider extends ChangeNotifier {
     _accountGroups = await _db.getAllAccountGroups();
     _accounts = await _db.getAllAccounts();
     _categories = await _db.getAllCategories();
+    _categoryBudgets = await _db.getCategoryBudgets();
     _transactions = await _db.getAllTransactions();
     _enableCsvImport = await _db.getEnableCsvImport();
     _enableNotificationReader = await _db.getEnableNotificationReader();
@@ -69,6 +91,13 @@ class MoneyProvider extends ChangeNotifier {
     _themeMode = ThemeMode.values[modeIndex.clamp(0, 2)];
 
     _isLoading = false;
+    notifyListeners();
+  }
+
+  // --- GESTIONE BUDGET MENSILI ---
+  Future<void> setCategoryBudget(String categoryId, double amount) async {
+    await _db.setCategoryBudget(categoryId, amount);
+    _categoryBudgets = await _db.getCategoryBudgets();
     notifyListeners();
   }
 
@@ -157,6 +186,7 @@ class MoneyProvider extends ChangeNotifier {
   Future<void> deleteCategory(String categoryId) async {
     await _db.deleteCategory(categoryId);
     _categories = await _db.getAllCategories();
+    _categoryBudgets = await _db.getCategoryBudgets();
     notifyListeners();
   }
 
@@ -183,7 +213,7 @@ class MoneyProvider extends ChangeNotifier {
     }).toList();
   }
 
-  /// Totale Depositi / Entrate del mese per uno specifico Conto (Entrate + Trasferimenti in ingresso)
+  /// Totale Depositi / Entrate del mese per uno specifico Conto
   double getAccountMonthlyDeposits(String accountId) {
     double total = 0.0;
     for (final tx in getAccountMonthlyTransactions(accountId)) {
@@ -197,7 +227,7 @@ class MoneyProvider extends ChangeNotifier {
     return total;
   }
 
-  /// Totale Prelievi / Uscite del mese per uno specifico Conto (Spese + Trasferimenti in uscita)
+  /// Totale Prelievi / Uscite del mese per uno specifico Conto
   double getAccountMonthlyWithdrawals(String accountId) {
     double total = 0.0;
     for (final tx in getAccountMonthlyTransactions(accountId)) {

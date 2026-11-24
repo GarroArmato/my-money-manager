@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../utils/formatters.dart';
 import '../utils/money_scope.dart';
+import '../widgets/app_top_bar.dart';
 
 class TransactionsScreen extends StatelessWidget {
   const TransactionsScreen({super.key});
@@ -23,9 +24,9 @@ class TransactionsScreen extends StatelessWidget {
       ..sort((a, b) => b.compareTo(a));
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Money Manager'),
-        centerTitle: false,
+      appBar: AppTopBar(
+        title: 'Movimenti',
+        icon: Icons.receipt_long_outlined,
         actions: [
           IconButton(
             tooltip: 'Mese precedente',
@@ -35,7 +36,11 @@ class TransactionsScreen extends StatelessWidget {
           Center(
             child: Text(
               AppFormatters.formatMonthYear(provider.selectedMonth),
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: Colors.white,
+              ),
             ),
           ),
           IconButton(
