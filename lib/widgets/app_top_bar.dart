@@ -24,23 +24,16 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final provider = MoneyScope.of(context);
     final primary = provider.primaryColor;
-    final secondary = provider.secondaryColor;
 
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
             primary,
-            Color.lerp(primary, Colors.black, 0.32) ?? primary,
+            Color.lerp(primary, Colors.black, 0.28) ?? primary,
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-        ),
-        border: Border(
-          bottom: BorderSide(
-            color: secondary.withValues(alpha: 0.45),
-            width: 1.5,
-          ),
         ),
       ),
       child: AppBar(

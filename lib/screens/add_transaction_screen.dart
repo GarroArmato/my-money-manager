@@ -956,13 +956,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Divider(
-            thickness: 6,
-            color: Theme.of(context)
-                .colorScheme
-                .surfaceContainerHighest
-                .withValues(alpha: 0.5),
+            height: 1,
+            thickness: 1,
+            color: subtleLineColor,
           ),
           const SizedBox(height: 12),
 
