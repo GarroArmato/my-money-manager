@@ -55,7 +55,7 @@ class AccountGroup {
     ),
     AccountGroup(
       id: 'grp_bank',
-      name: 'Conti Bancari',
+      name: 'Conti',
       iconKey: 'account_balance',
       supportsCsvImport: true,
     ),
@@ -67,7 +67,7 @@ class AccountGroup {
     ),
     AccountGroup(
       id: 'grp_savings',
-      name: 'Risparmi & Investimenti',
+      name: 'Risparmi',
       iconKey: 'savings',
       supportsCsvImport: true,
     ),
@@ -81,6 +81,9 @@ class Account {
   final double initialBalance;
   final String currency;
   final String? iban;
+  /// Se true, il conto è considerato "Saldo disponibile" e viene sommato nel Totale (Saldo attivo / passivo).
+  /// Se false, è considerato "Saldo non disponibile / accantonato" (mostrato in grigio e sommato a parte).
+  final bool includeInTotal;
 
   Account({
     required this.id,
@@ -89,7 +92,28 @@ class Account {
     this.initialBalance = 0.0,
     this.currency = 'EUR',
     this.iban,
+    this.includeInTotal = true,
   });
+
+  Account copyWith({
+    String? id,
+    String? name,
+    String? groupId,
+    double? initialBalance,
+    String? currency,
+    String? iban,
+    bool? includeInTotal,
+  }) {
+    return Account(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      groupId: groupId ?? this.groupId,
+      initialBalance: initialBalance ?? this.initialBalance,
+      currency: currency ?? this.currency,
+      iban: iban ?? this.iban,
+      includeInTotal: includeInTotal ?? this.includeInTotal,
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -99,6 +123,7 @@ class Account {
       'initialBalance': initialBalance,
       'currency': currency,
       'iban': iban,
+      'includeInTotal': includeInTotal,
     };
   }
 
@@ -110,6 +135,7 @@ class Account {
       initialBalance: (map['initialBalance'] as num).toDouble(),
       currency: map['currency'] as String? ?? 'EUR',
       iban: map['iban'] as String?,
+      includeInTotal: map['includeInTotal'] as bool? ?? true,
     );
   }
 }

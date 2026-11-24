@@ -169,6 +169,12 @@ class MoneyProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> toggleAccountIncludeInTotal(String accountId) async {
+    final acc = getAccountById(accountId);
+    if (acc == null) return;
+    await saveAccount(acc.copyWith(includeInTotal: !acc.includeInTotal));
+  }
+
   Future<void> deleteAccount(String accountId) async {
     await _db.deleteAccount(accountId);
     _accounts = await _db.getAllAccounts();
@@ -288,25 +294,33 @@ class MoneyProvider extends ChangeNotifier {
     return balance;
   }
 
-  /// Totale Attività (conti con saldo positivo, stile Money Manager)
+  /// Saldo attivo (conti inclusi nel totale con saldo positivo, stile Money Manager)
   double get totalAssets {
-    return _accounts.fold(0.0, (sum, acc) {
+    return _accounts.where((a) => a.includeInTotal).fold(0.0, (sum, acc) {
       final bal = getAccountBalance(acc.id);
       return bal > 0 ? sum + bal : sum;
     });
   }
 
-  /// Totale Passività / Debiti (conti con saldo negativo, stile Money Manager)
+  /// Saldo passivo / Debiti (conti inclusi nel totale con saldo negativo, stile Money Manager)
   double get totalLiabilities {
-    return _accounts.fold(0.0, (sum, acc) {
+    return _accounts.where((a) => a.includeInTotal).fold(0.0, (sum, acc) {
       final bal = getAccountBalance(acc.id);
       return bal < 0 ? sum + bal.abs() : sum;
     });
   }
 
-  /// Patrimonio totale netto (Attività - Passività)
+  /// Totale netto dei conti disponibili (inclusi nel totale: Saldo attivo - Saldo passivo)
   double get totalNetWorth {
-    return _accounts.fold(
+    return _accounts.where((a) => a.includeInTotal).fold(
+      0.0,
+      (sum, acc) => sum + getAccountBalance(acc.id),
+    );
+  }
+
+  /// Totale dei conti NON disponibili (esclusi dal totale, es. Parte Fissa / Risparmi accantonati)
+  double get totalUnavailableBalance {
+    return _accounts.where((a) => !a.includeInTotal).fold(
       0.0,
       (sum, acc) => sum + getAccountBalance(acc.id),
     );

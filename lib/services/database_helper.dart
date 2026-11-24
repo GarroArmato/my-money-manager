@@ -28,6 +28,7 @@ class DatabaseHelper {
       name: 'Portafoglio Contanti',
       groupId: 'grp_cash',
       initialBalance: 120.00,
+      includeInTotal: true,
     ),
     Account(
       id: 'acc_bank_main',
@@ -35,18 +36,28 @@ class DatabaseHelper {
       groupId: 'grp_bank',
       initialBalance: 1450.00,
       iban: 'IT60X0306909606100000123456',
+      includeInTotal: true,
+    ),
+    Account(
+      id: 'acc_bank_fixed',
+      name: 'Parte Fissa / Accantonata',
+      groupId: 'grp_bank',
+      initialBalance: 2000.00,
+      includeInTotal: false,
     ),
     Account(
       id: 'acc_card_revolut',
       name: 'Carta Revolut / Prepagata',
       groupId: 'grp_card',
       initialBalance: 250.00,
+      includeInTotal: true,
     ),
     Account(
       id: 'acc_savings',
       name: 'Salvadanaio Risparmi',
       groupId: 'grp_savings',
       initialBalance: 3000.00,
+      includeInTotal: false,
     ),
   ];
 

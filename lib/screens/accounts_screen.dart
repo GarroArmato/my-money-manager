@@ -6,7 +6,7 @@ import '../utils/money_scope.dart';
 import '../widgets/app_top_bar.dart';
 import 'account_detail_screen.dart';
 
-/// Mostra il dialog per Creare o Modificare un Gruppo di Conti (es. Contanti, Conti Bancari, Crypto, Buoni Pasto...)
+/// Mostra il dialog per Creare o Modificare un Gruppo di Conti (es. Contanti, Conti, Carte, Risparmi...)
 Future<AccountGroup?> showAccountGroupEditorDialog(
   BuildContext context, {
   AccountGroup? existingGroup,
@@ -41,7 +41,7 @@ Future<AccountGroup?> showAccountGroupEditorDialog(
                       autofocus: true,
                       decoration: InputDecoration(
                         labelText:
-                            'Nome Gruppo (es. Crypto, Buoni Pasto, Prestiti...)',
+                            'Nome Gruppo (es. Conti, Risparmi, Crypto...)',
                         prefixIcon: Icon(
                           AccountGroup.availableGroupIcons[selectedIconKey] ??
                               Icons.folder_outlined,
@@ -149,7 +149,7 @@ Future<AccountGroup?> showAccountGroupEditorDialog(
   );
 }
 
-/// Mostra il dialog modale per Creare o Modificare un Conto
+/// Mostra il dialog modale per Creare o Modificare un Conto (con opzione "Metti nel totale / Saldo disponibile")
 Future<Account?> showAccountEditorDialog(
   BuildContext context, {
   Account? existingAccount,
@@ -172,6 +172,7 @@ Future<Account?> showAccountEditorDialog(
       (provider.accountGroups.isNotEmpty
           ? provider.accountGroups.first.id
           : 'grp_cash');
+  bool includeInTotal = existingAccount?.includeInTotal ?? true;
 
   return showDialog<Account>(
     context: context,
@@ -247,10 +248,10 @@ Future<Account?> showAccountEditorDialog(
                     // Nome Conto
                     TextField(
                       controller: nameController,
-                      autofocus: true,
+                      autofocus: existingAccount == null,
                       decoration: const InputDecoration(
                         labelText:
-                            'Nome Conto (es. Intesa, PostePay, Ticket...)',
+                            'Nome Conto (es. I.S.Paolo, Parte Fissa, Salvadanaio...)',
                         prefixIcon: Icon(Icons.account_balance_wallet_outlined),
                         border: OutlineInputBorder(),
                       ),
@@ -268,6 +269,39 @@ Future<Account?> showAccountEditorDialog(
                         labelText: 'Saldo Iniziale (€)',
                         prefixIcon: Icon(Icons.euro),
                         border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Switch: Metti nel totale (Saldo disponibile vs Saldo non disponibile)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(ctx)
+                            .colorScheme
+                            .surfaceContainerHighest
+                            .withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: SwitchListTile(
+                        title: const Text(
+                          'Includi nel Totale (Saldo disponibile)',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        subtitle: Text(
+                          includeInTotal
+                              ? 'Disponibile: viene sommato in Saldo attivo / Totale'
+                              : 'Non disponibile: mostrato in grigio e sommato a parte',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        value: includeInTotal,
+                        onChanged: (val) {
+                          setDialogState(() {
+                            includeInTotal = val;
+                          });
+                        },
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -308,6 +342,7 @@ Future<Account?> showAccountEditorDialog(
                     groupId: selectedGroupId,
                     initialBalance: initialBalance,
                     iban: ibanText.isEmpty ? null : ibanText,
+                    includeInTotal: includeInTotal,
                   );
 
                   await MoneyScope.read(context).saveAccount(acc);
@@ -326,8 +361,16 @@ Future<Account?> showAccountEditorDialog(
   );
 }
 
-class AccountsScreen extends StatelessWidget {
+class AccountsScreen extends StatefulWidget {
   const AccountsScreen({super.key});
+
+  @override
+  State<AccountsScreen> createState() => _AccountsScreenState();
+}
+
+class _AccountsScreenState extends State<AccountsScreen> {
+  // Quando clicchi sulla pennina (✎) in alto a destra entra in Modalità Modifica (come nella 2a foto!)
+  bool _isEditMode = false;
 
   Future<void> _showCsvImportDialog(
     BuildContext context,
@@ -401,51 +444,131 @@ class AccountsScreen extends StatelessWidget {
     );
   }
 
+  void _showAddAccountOrGroupSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.account_balance_wallet_outlined),
+                title: const Text(
+                  'Aggiungi Nuovo Conto',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text(
+                  'Crea un conto disponibile o non disponibile (accantonato)',
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  showAccountEditorDialog(context);
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.create_new_folder_outlined),
+                title: const Text(
+                  'Aggiungi Nuovo Gruppo di Conti',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text(
+                  'Crea una nuova sezione (es. Conti, Risparmi, Investimenti...)',
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  showAccountGroupEditorDialog(context);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = MoneyScope.of(context);
 
     return Scaffold(
       appBar: AppTopBar(
-        title: 'Conti & Gruppi',
+        title: 'Conto',
         icon: Icons.account_balance_outlined,
+        leading: _isEditMode
+            ? IconButton(
+                tooltip: 'Fine modifica',
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () {
+                  setState(() {
+                    _isEditMode = false;
+                  });
+                },
+              )
+            : null,
         actions: [
-          _TopBarActionButton(
-            icon: Icons.create_new_folder_outlined,
-            label: 'Gruppo',
-            onPressed: () => showAccountGroupEditorDialog(context),
-          ),
-          const SizedBox(width: 8),
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: _TopBarActionButton(
-              icon: Icons.add,
-              label: 'Conto',
-              onPressed: () => showAccountEditorDialog(context),
+          // Pennina (✎) come nello screenshot di Money Manager
+          if (!_isEditMode)
+            IconButton(
+              tooltip: 'Modifica conti e visibilità nel totale',
+              icon: const Icon(Icons.edit_outlined, color: Colors.white),
+              onPressed: () {
+                setState(() {
+                  _isEditMode = true;
+                });
+              },
+            )
+          else
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _isEditMode = false;
+                });
+              },
+              child: const Text(
+                'Fine',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
+
+          // Tasto (+) come nello screenshot di Money Manager
+          IconButton(
+            tooltip: 'Aggiungi Conto o Gruppo',
+            icon: const Icon(Icons.add, color: Colors.white, size: 26),
+            onPressed: () => _showAddAccountOrGroupSheet(context),
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+      body: Column(
         children: [
-          // Barra superiore a 3 colonne in stile Money Manager: Attività | Passività | Totale
+          // Barra superiore a 3 colonne identica alle tue foto: Saldo attivo | Saldo passivo | Totale
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(16),
+              color: Theme.of(context)
+                  .colorScheme
+                  .surfaceContainerHighest
+                  .withValues(alpha: 0.35),
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.grey.withValues(alpha: 0.2),
+                ),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _HeaderMetric(
-                  label: 'Attività',
+                  label: 'Saldo attivo',
                   value: AppFormatters.formatCurrency(provider.totalAssets),
                   color: provider.secondaryColor,
                 ),
                 _HeaderMetric(
-                  label: 'Passività',
+                  label: 'Saldo passivo',
                   value:
                       AppFormatters.formatCurrency(provider.totalLiabilities),
                   color: provider.expenseColor,
@@ -458,323 +581,309 @@ class AccountsScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 16),
 
-          // Raggruppamento dei conti per Gruppo di Conti personalizzabile
-          ...provider.accountGroups.map((group) {
-            final groupAccounts = provider.accounts
-                .where((a) => a.groupId == group.id)
-                .toList();
+          if (_isEditMode)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: provider.primaryColor.withValues(alpha: 0.15),
+              child: const Row(
+                children: [
+                  Icon(Icons.visibility_outlined, size: 16, color: Colors.grey),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Tocca l\'occhio 👁 per mettere/togliere un conto dal Totale (Saldo disponibile vs Non disponibile). Tocca il nome per modificarlo.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
-            final groupSubtotal = groupAccounts.fold(
-              0.0,
-              (sum, a) => sum + provider.getAccountBalance(a.id),
-            );
+          // Lista Gruppi e Conti in stile Money Manager (come nelle 2 foto)
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 88),
+              children: provider.accountGroups.map((group) {
+                final groupAccounts = provider.accounts
+                    .where((a) => a.groupId == group.id)
+                    .toList();
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Intestazione del Gruppo di Conti con subtotale e azioni (+ Conto nel gruppo / Modifica gruppo)
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                  child: Row(
-                    children: [
-                      Icon(group.icon, size: 18, color: Colors.grey),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          group.name.toUpperCase(),
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelLarge
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      Text(
-                        AppFormatters.formatCurrency(groupSubtotal),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        tooltip: 'Aggiungi conto in ${group.name}',
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.add_circle_outline, size: 18),
-                        onPressed: () {
-                          showAccountEditorDialog(
-                            context,
-                            initialGroupId: group.id,
-                          );
-                        },
-                      ),
-                      PopupMenuButton<String>(
-                        tooltip: 'Opzioni gruppo',
-                        icon: const Icon(Icons.more_horiz,
-                            size: 18, color: Colors.grey),
-                        onSelected: (action) {
-                          if (action == 'edit_group') {
-                            showAccountGroupEditorDialog(
-                              context,
-                              existingGroup: group,
-                            );
-                          } else if (action == 'delete_group') {
-                            provider.deleteAccountGroup(group.id);
-                          }
-                        },
-                        itemBuilder: (_) => [
-                          const PopupMenuItem(
-                            value: 'edit_group',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit_outlined, size: 18),
-                                SizedBox(width: 8),
-                                Text('Modifica Gruppo'),
-                              ],
-                            ),
+                // Calcola separatamente il Saldo NON disponibile (in grigio) e il Saldo Disponibile (colorato) del gruppo!
+                final unavailableAccounts =
+                    groupAccounts.where((a) => !a.includeInTotal).toList();
+                final availableAccounts =
+                    groupAccounts.where((a) => a.includeInTotal).toList();
+
+                final double groupUnavailableSum = unavailableAccounts.fold(
+                  0.0,
+                  (sum, a) => sum + provider.getAccountBalance(a.id),
+                );
+                final double groupAvailableSum = availableAccounts.fold(
+                  0.0,
+                  (sum, a) => sum + provider.getAccountBalance(a.id),
+                );
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Intestazione del Gruppo (es. "Conti      € 3.793,05    € 21,32")
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: Colors.grey.withValues(alpha: 0.2),
                           ),
-                          if (provider.accountGroups.length > 1)
-                            const PopupMenuItem(
-                              value: 'delete_group',
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: _isEditMode
+                                  ? () => showAccountGroupEditorDialog(
+                                        context,
+                                        existingGroup: group,
+                                      )
+                                  : null,
                               child: Row(
                                 children: [
-                                  Icon(Icons.delete_outline,
-                                      size: 18, color: Colors.red),
-                                  SizedBox(width: 8),
-                                  Text('Elimina Gruppo',
-                                      style: TextStyle(color: Colors.red)),
+                                  Text(
+                                    group.name,
+                                    style: const TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  if (_isEditMode) ...[
+                                    const SizedBox(width: 6),
+                                    const Icon(
+                                      Icons.edit_outlined,
+                                      size: 14,
+                                      color: Colors.grey,
+                                    ),
+                                  ],
                                 ],
+                              ),
+                            ),
+                          ),
+
+                          // Subtotale NON disponibile del gruppo (in grigio, come "€ 3793,05" nella tua foto)
+                          if (unavailableAccounts.isNotEmpty)
+                            Padding(
+                              padding: EdgeInsets.only(
+                                right: availableAccounts.isNotEmpty ? 20 : 0,
+                              ),
+                              child: Text(
+                                AppFormatters.formatCurrency(
+                                  groupUnavailableSum,
+                                ),
+                                style: const TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+
+                          // Subtotale Disponibile del gruppo (colorato, come "€ 21,32" nella tua foto)
+                          if (availableAccounts.isNotEmpty ||
+                              unavailableAccounts.isEmpty)
+                            Text(
+                              AppFormatters.formatCurrency(groupAvailableSum),
+                              style: TextStyle(
+                                color: groupAvailableSum < 0
+                                    ? provider.expenseColor
+                                    : provider.secondaryColor,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-
-                if (groupAccounts.isEmpty)
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: ListTile(
-                      dense: true,
-                      title: Text(
-                        'Nessun conto in "${group.name}". Tocca per aggiungerne uno.',
-                        style:
-                            const TextStyle(color: Colors.grey, fontSize: 13),
-                      ),
-                      trailing: const Icon(Icons.add, size: 18),
-                      onTap: () => showAccountEditorDialog(
-                        context,
-                        initialGroupId: group.id,
-                      ),
                     ),
-                  ),
 
-                ...groupAccounts.map((account) {
-                  final balance = provider.getAccountBalance(account.id);
+                    // Righe dei conti appartenenti al gruppo
+                    ...groupAccounts.map((account) {
+                      final balance = provider.getAccountBalance(account.id);
+                      final isIncluded = account.includeInTotal;
 
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      // Cliccando sul conto si apre la pagina con i movimenti di quel conto (come in Money Manager!)
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => AccountDetailScreen(
-                              accountId: account.id,
+                      final Color balanceColor = !isIncluded
+                          ? Colors.grey
+                          : (balance > 0
+                              ? provider.secondaryColor
+                              : (balance < 0
+                                  ? provider.expenseColor
+                                  : Theme.of(context).colorScheme.onSurface));
+
+                      // --- MODALITÀ MODIFICA (2a Foto: pallino rosso '-', nome, occhio '👁', '≡') ---
+                      if (_isEditMode) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withValues(alpha: 0.25),
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Colors.grey.withValues(alpha: 0.18),
+                              ),
+                            ),
+                          ),
+                          child: ListTile(
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 16),
+                            leading: InkWell(
+                              onTap: provider.accounts.length <= 1
+                                  ? null
+                                  : () => provider.deleteAccount(account.id),
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                width: 26,
+                                height: 26,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFFF5252),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.remove,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              ),
+                            ),
+                            title: InkWell(
+                              onTap: () => showAccountEditorDialog(
+                                context,
+                                existingAccount: account,
+                              ),
+                              child: Text(
+                                account.name,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                  color: isIncluded ? null : Colors.grey,
+                                ),
+                              ),
+                            ),
+                            subtitle: Text(
+                              isIncluded
+                                  ? 'Incluso nel totale (Saldo disponibile)'
+                                  : 'Escluso dal totale (Saldo non disponibile)',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: isIncluded
+                                    ? provider.secondaryColor
+                                    : Colors.grey,
+                              ),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Icona Occhio (👁) per attivare/disattivare "Metti nel totale"
+                                IconButton(
+                                  tooltip: isIncluded
+                                      ? 'Escludi dal totale (Rendi saldo non disponibile)'
+                                      : 'Includi nel totale (Rendi saldo disponibile)',
+                                  icon: Icon(
+                                    isIncluded
+                                        ? Icons.visibility_outlined
+                                        : Icons.visibility_off_outlined,
+                                    color: isIncluded
+                                        ? provider.secondaryColor
+                                        : Colors.grey,
+                                  ),
+                                  onPressed: () => provider
+                                      .toggleAccountIncludeInTotal(account.id),
+                                ),
+                                IconButton(
+                                  tooltip: 'Modifica conto',
+                                  icon: const Icon(
+                                    Icons.drag_handle,
+                                    color: Colors.grey,
+                                  ),
+                                  onPressed: () => showAccountEditorDialog(
+                                    context,
+                                    existingAccount: account,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
+                      }
+
+                      // --- MODALITÀ NORMALE (1a Foto: Nome a sinistra, Importo colorato o grigio a destra) ---
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withValues(alpha: 0.25),
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.grey.withValues(alpha: 0.18),
+                            ),
+                          ),
                         ),
-                        child: Column(
-                          children: [
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: CircleAvatar(
-                                child: Icon(group.icon),
-                              ),
-                              title: Text(
-                                account.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
+                        child: ListTile(
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 16),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => AccountDetailScreen(
+                                  accountId: account.id,
                                 ),
                               ),
-                              subtitle: Text(
-                                account.iban != null && account.iban!.isNotEmpty
-                                    ? '${account.iban!} • Tocca per vedere i movimenti'
-                                    : 'Tocca per vedere i movimenti del conto',
-                                style: const TextStyle(fontSize: 12),
+                            );
+                          },
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  account.name,
+                                  style: const TextStyle(
+                                    fontSize: 15.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                               ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    AppFormatters.formatCurrency(balance),
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                      color: balance < 0
-                                          ? Colors.red.shade700
-                                          : null,
-                                    ),
+                              if (group.supportsCsvImport &&
+                                  provider.enableCsvImport)
+                                IconButton(
+                                  tooltip: 'Importa CSV in ${account.name}',
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(
+                                    Icons.upload_file,
+                                    size: 17,
+                                    color: Colors.grey,
                                   ),
-                                  PopupMenuButton<String>(
-                                    onSelected: (action) {
-                                      if (action == 'view') {
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) => AccountDetailScreen(
-                                              accountId: account.id,
-                                            ),
-                                          ),
-                                        );
-                                      } else if (action == 'edit') {
-                                        showAccountEditorDialog(
-                                          context,
-                                          existingAccount: account,
-                                        );
-                                      } else if (action == 'delete') {
-                                        provider.deleteAccount(account.id);
-                                      }
-                                    },
-                                    itemBuilder: (_) => [
-                                      const PopupMenuItem(
-                                        value: 'view',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.receipt_long, size: 18),
-                                            SizedBox(width: 8),
-                                            Text('Vedi Movimenti Conto'),
-                                          ],
-                                        ),
-                                      ),
-                                      const PopupMenuItem(
-                                        value: 'edit',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.edit_outlined, size: 18),
-                                            SizedBox(width: 8),
-                                            Text('Modifica Conto'),
-                                          ],
-                                        ),
-                                      ),
-                                      if (provider.accounts.length > 1)
-                                        const PopupMenuItem(
-                                          value: 'delete',
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.delete_outline,
-                                                  size: 18, color: Colors.red),
-                                              SizedBox(width: 8),
-                                              Text('Elimina Conto',
-                                                  style: TextStyle(
-                                                      color: Colors.red)),
-                                            ],
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (group.supportsCsvImport &&
-                                provider.enableCsvImport) ...[
-                              const Divider(height: 8),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Row(
-                                    children: [
-                                      Icon(
-                                        Icons.table_chart_outlined,
-                                        size: 15,
-                                        color: Colors.teal,
-                                      ),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'Importazione movimenti da CSV / Excel',
-                                        style: TextStyle(fontSize: 12),
-                                      ),
-                                    ],
-                                  ),
-                                  TextButton.icon(
-                                    onPressed: () =>
-                                        _showCsvImportDialog(context, account),
-                                    icon:
-                                        const Icon(Icons.upload_file, size: 16),
-                                    label: const Text('Importa CSV'),
-                                  ),
-                                ],
-                              ),
+                                  onPressed: () =>
+                                      _showCsvImportDialog(context, account),
+                                ),
                             ],
-                          ],
+                          ),
+                          trailing: Text(
+                            AppFormatters.formatCurrency(balance),
+                            style: TextStyle(
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w600,
+                              color: balanceColor,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  );
-                }),
-                const SizedBox(height: 10),
-              ],
-            );
-          }),
-        ],
-      ),
-    );
-  }
-}
-
-class _TopBarActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-
-  const _TopBarActionButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.16),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.28),
-              width: 1,
+                      );
+                    }),
+                  ],
+                );
+              }).toList(),
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 15, color: Colors.white),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12.5,
-                ),
-              ),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -797,14 +906,17 @@ class _HeaderMetric extends StatelessWidget {
       children: [
         Text(
           label,
-          style: Theme.of(context).textTheme.labelMedium,
+          style: const TextStyle(
+            fontSize: 12.5,
+            color: Colors.grey,
+          ),
         ),
         const SizedBox(height: 4),
         Text(
           value,
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            fontSize: 15,
+            fontSize: 15.5,
             color: color,
           ),
         ),
