@@ -444,6 +444,159 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
   }
 
+  Future<void> _showFavoritesSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        final provider = MoneyScope.of(sheetContext);
+        final favs = provider.favoriteTemplates;
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.star, color: Colors.amber),
+                        SizedBox(width: 8),
+                        Text(
+                          'Movimenti Preferiti (Compilazione Rapida)',
+                          style: TextStyle(
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    TextButton.icon(
+                      onPressed: () {
+                        final rawAmt = _amountController.text
+                            .trim()
+                            .replaceAll(',', '.');
+                        final amt = double.tryParse(rawAmt) ?? 0.0;
+                        final cat =
+                            provider.getCategoryById(_selectedCategoryId);
+                        final title = _noteController.text.trim().isNotEmpty
+                            ? _noteController.text.trim()
+                            : (cat?.name ?? 'Preferito');
+
+                        provider.addFavoriteTemplate(
+                          FavoriteTemplate(
+                            id: AppFormatters.generateId('fav'),
+                            title: title,
+                            amount: amt,
+                            type: _selectedType,
+                            categoryId: _selectedCategoryId,
+                            subcategory: _selectedSubcategory,
+                            accountId: _selectedAccountId,
+                            note: _noteController.text.trim(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Salva attuale'),
+                    ),
+                  ],
+                ),
+                const Divider(),
+                if (favs.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Center(
+                      child: Text(
+                        'Nessun preferito salvato.\nCompila un movimento e premi "+ Salva attuale"!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: favs.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, idx) {
+                        final fav = favs[idx];
+                        final cat = provider.getCategoryById(fav.categoryId);
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            backgroundColor: (cat?.color ?? Colors.amber)
+                                .withValues(alpha: 0.15),
+                            child: Icon(
+                              cat?.icon ?? Icons.star_border,
+                              color: cat?.color ?? Colors.amber,
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            fav.title,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            '${cat?.name ?? ''}${fav.subcategory != null ? ' / ${fav.subcategory}' : ''}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (fav.amount > 0)
+                                Text(
+                                  AppFormatters.formatCurrency(fav.amount),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  size: 18,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: () =>
+                                    provider.deleteFavoriteTemplate(fav.id),
+                              ),
+                            ],
+                          ),
+                          onTap: () {
+                            setState(() {
+                              _selectedType = fav.type;
+                              if (fav.amount > 0) {
+                                _amountController.text =
+                                    fav.amount.toStringAsFixed(2);
+                              }
+                              if (fav.categoryId != null) {
+                                _selectedCategoryId = fav.categoryId;
+                              }
+                              _selectedSubcategory = fav.subcategory;
+                              if (fav.accountId != null &&
+                                  provider.accounts
+                                      .any((a) => a.id == fav.accountId)) {
+                                _selectedAccountId = fav.accountId;
+                              }
+                              _noteController.text = fav.note;
+                            });
+                            Navigator.of(sheetContext).pop();
+                          },
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _promptTagDialog() async {
     final controller = TextEditingController(text: _selectedTag ?? '');
     final tag = await showDialog<String>(
@@ -623,15 +776,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         icon: screenIcon,
         actions: [
           IconButton(
-            tooltip: 'Inserisci ultima nota usata',
+            tooltip: 'Movimenti Preferiti (Compilazione Rapida)',
             icon: const Icon(Icons.star_border, color: Colors.white),
-            onPressed: () {
-              if (allSavedNotes.isNotEmpty) {
-                setState(() {
-                  _noteController.text = allSavedNotes.first;
-                });
-              }
-            },
+            onPressed: _showFavoritesSheet,
           ),
         ],
       ),

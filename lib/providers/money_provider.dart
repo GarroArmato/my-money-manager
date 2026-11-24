@@ -17,6 +17,48 @@ class MoneyProvider extends ChangeNotifier {
   List<TransactionCategory> _categories = [];
   Map<String, double> _categoryBudgets = {};
   List<MoneyTransaction> _transactions = [];
+  final List<FavoriteTemplate> _favoriteTemplates = [
+    const FavoriteTemplate(
+      id: 'fav_1',
+      title: 'Colazione & Caffè',
+      amount: 2.50,
+      type: TransactionType.expense,
+      categoryId: 'cat_restaurant',
+      subcategory: 'Colazione & Bar',
+      accountId: 'acc_cash',
+      note: 'Colazione al bar',
+    ),
+    const FavoriteTemplate(
+      id: 'fav_2',
+      title: 'Rifornimento Benzina',
+      amount: 40.00,
+      type: TransactionType.expense,
+      categoryId: 'cat_transport',
+      subcategory: 'Carburante',
+      accountId: 'acc_bank_main',
+      note: 'Rifornimento carburante',
+    ),
+    const FavoriteTemplate(
+      id: 'fav_3',
+      title: 'Spesa Supermercato',
+      amount: 55.00,
+      type: TransactionType.expense,
+      categoryId: 'cat_food',
+      subcategory: 'Supermercato',
+      accountId: 'acc_bank_main',
+      note: 'Spesa settimanale',
+    ),
+    const FavoriteTemplate(
+      id: 'fav_4',
+      title: 'Stipendio Mensile',
+      amount: 1850.00,
+      type: TransactionType.income,
+      categoryId: 'cat_salary',
+      subcategory: 'Stipendio Base',
+      accountId: 'acc_bank_main',
+      note: 'Stipendio mensile',
+    ),
+  ];
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   bool _isLoading = false;
 
@@ -39,6 +81,8 @@ class MoneyProvider extends ChangeNotifier {
       _categories.where((c) => c.kind == CategoryKind.income).toList();
   Map<String, double> get categoryBudgets => _categoryBudgets;
   List<MoneyTransaction> get allTransactions => _transactions;
+  List<FavoriteTemplate> get favoriteTemplates =>
+      List<FavoriteTemplate>.unmodifiable(_favoriteTemplates);
   DateTime get selectedMonth => _selectedMonth;
   bool get isLoading => _isLoading;
   bool get enableCsvImport => _enableCsvImport;
@@ -91,6 +135,17 @@ class MoneyProvider extends ChangeNotifier {
     _themeMode = ThemeMode.values[modeIndex.clamp(0, 2)];
 
     _isLoading = false;
+    notifyListeners();
+  }
+
+  // --- GESTIONE PREFERITI (STELLA ☆) ---
+  void addFavoriteTemplate(FavoriteTemplate fav) {
+    _favoriteTemplates.insert(0, fav);
+    notifyListeners();
+  }
+
+  void deleteFavoriteTemplate(String id) {
+    _favoriteTemplates.removeWhere((f) => f.id == id);
     notifyListeners();
   }
 

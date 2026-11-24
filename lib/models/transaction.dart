@@ -79,3 +79,26 @@ class MoneyTransaction {
     );
   }
 }
+
+/// Modello per la Stella (☆): Movimento Preferito / Ricorrente per compilare in 1 tocco
+class FavoriteTemplate {
+  final String id;
+  final String title;
+  final double amount;
+  final TransactionType type;
+  final String? categoryId;
+  final String? subcategory;
+  final String? accountId;
+  final String note;
+
+  const FavoriteTemplate({
+    required this.id,
+    required this.title,
+    required this.amount,
+    required this.type,
+    this.categoryId,
+    this.subcategory,
+    this.accountId,
+    this.note = '',
+  });
+}
