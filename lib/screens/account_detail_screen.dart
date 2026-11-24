@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../utils/formatters.dart';
 import '../utils/money_scope.dart';
+import '../widgets/app_top_bar.dart';
 import 'accounts_screen.dart';
 import 'add_transaction_screen.dart';
 
@@ -44,41 +45,33 @@ class AccountDetailScreen extends StatelessWidget {
       ..sort((a, b) => b.compareTo(a));
 
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              account.name,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            ),
-            if (group != null)
-              Text(
-                group.name,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-          ],
-        ),
+      appBar: AppTopBar(
+        title: account.name,
+        icon: group?.icon ?? Icons.account_balance_wallet_outlined,
         actions: [
           IconButton(
             tooltip: 'Mese precedente',
-            icon: const Icon(Icons.chevron_left),
+            icon: const Icon(Icons.chevron_left, color: Colors.white),
             onPressed: () => provider.changeMonth(-1),
           ),
           Center(
             child: Text(
               AppFormatters.formatMonthYear(provider.selectedMonth),
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: Colors.white,
+              ),
             ),
           ),
           IconButton(
             tooltip: 'Mese successivo',
-            icon: const Icon(Icons.chevron_right),
+            icon: const Icon(Icons.chevron_right, color: Colors.white),
             onPressed: () => provider.changeMonth(1),
           ),
           IconButton(
             tooltip: 'Modifica Conto',
-            icon: const Icon(Icons.edit_outlined),
+            icon: const Icon(Icons.edit_outlined, color: Colors.white),
             onPressed: () {
               showAccountEditorDialog(
                 context,

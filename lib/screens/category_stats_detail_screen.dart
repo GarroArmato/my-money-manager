@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../utils/formatters.dart';
 import '../utils/money_scope.dart';
+import '../widgets/app_top_bar.dart';
 
 class _SubcategoryStatRow {
   final String name;
@@ -285,23 +286,14 @@ class CategoryStatsDetailScreen extends StatelessWidget {
         '${_shortMonths[selectedMonth.month - 1]} ${selectedMonth.year}';
 
     return Scaffold(
-      appBar: AppBar(
-        leadingWidth: 110,
-        leading: TextButton.icon(
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.chevron_left, color: Colors.white, size: 24),
-          label: const Text(
-            'Indietro',
-            style: TextStyle(color: Colors.white, fontSize: 15),
-          ),
-        ),
-        title: Text(categoryName),
-        centerTitle: true,
+      appBar: AppTopBar(
+        title: categoryName,
+        icon: category?.icon ?? Icons.pie_chart_outline,
         actions: [
           if (category != null)
             IconButton(
               tooltip: 'Aggiungi sottocategoria',
-              icon: const Icon(Icons.playlist_add),
+              icon: const Icon(Icons.playlist_add, color: Colors.white),
               onPressed: () => _showAddSubcategoryDialog(context, categoryId),
             ),
         ],

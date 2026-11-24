@@ -4,6 +4,7 @@ import '../models/transaction.dart';
 import '../providers/money_provider.dart';
 import '../utils/formatters.dart';
 import '../utils/money_scope.dart';
+import '../widgets/app_top_bar.dart';
 import 'accounts_screen.dart';
 import 'categories_screen.dart';
 
@@ -577,18 +578,22 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     // Colore attivo e titolo della schermata in base al tab (In | Spesa | Trasferimento)
     final Color activeTabColor;
     final String screenTitle;
+    final IconData screenIcon;
     switch (_selectedType) {
       case TransactionType.income:
         activeTabColor = provider.secondaryColor;
-        screenTitle = 'In';
+        screenTitle = 'Nuova Entrata';
+        screenIcon = Icons.arrow_downward;
         break;
       case TransactionType.expense:
-        activeTabColor = const Color(0xFFFF6B6B);
-        screenTitle = 'Spesa';
+        activeTabColor = provider.primaryColor;
+        screenTitle = 'Nuova Spesa';
+        screenIcon = Icons.arrow_upward;
         break;
       case TransactionType.transfer:
-        activeTabColor = Colors.white;
+        activeTabColor = provider.secondaryColor;
         screenTitle = 'Trasferimento';
+        screenIcon = Icons.swap_horiz;
         break;
     }
 
@@ -613,38 +618,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final subtleLineColor = Colors.grey.withValues(alpha: 0.25);
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
-        elevation: 0,
-        leadingWidth: 135,
-        leading: TextButton.icon(
-          onPressed: () => Navigator.of(context).pop(),
-          icon: Icon(
-            Icons.chevron_left,
-            size: 26,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-          label: Text(
-            'Transazioni',
-            style: TextStyle(
-              fontSize: 15,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-        ),
-        title: Text(
-          screenTitle,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-        ),
-        centerTitle: true,
+      appBar: AppTopBar(
+        title: screenTitle,
+        icon: screenIcon,
         actions: [
           IconButton(
-            tooltip: 'Preferiti / Modelli',
-            icon: Icon(
-              Icons.star_border,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
+            tooltip: 'Inserisci ultima nota usata',
+            icon: const Icon(Icons.star_border, color: Colors.white),
             onPressed: () {
               if (allSavedNotes.isNotEmpty) {
                 setState(() {
@@ -678,7 +658,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 _TypeTabButton(
                   label: 'Spesa',
                   isSelected: _selectedType == TransactionType.expense,
-                  activeColor: const Color(0xFFFF6B6B),
+                  activeColor: provider.primaryColor,
                   onTap: () {
                     setState(() {
                       _selectedType = TransactionType.expense;
@@ -690,7 +670,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 _TypeTabButton(
                   label: 'Trasferimento',
                   isSelected: _selectedType == TransactionType.transfer,
-                  activeColor: Theme.of(context).colorScheme.onSurface,
+                  activeColor: provider.secondaryColor,
                   onTap: () {
                     setState(() {
                       _selectedType = TransactionType.transfer;
@@ -1044,9 +1024,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                         child: FilledButton(
                           style: FilledButton.styleFrom(
                             backgroundColor:
-                                _selectedType == TransactionType.income
-                                    ? provider.secondaryColor
-                                    : const Color(0xFFFF6B6B),
+                                _selectedType == TransactionType.expense
+                                    ? provider.primaryColor
+                                    : provider.secondaryColor,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),

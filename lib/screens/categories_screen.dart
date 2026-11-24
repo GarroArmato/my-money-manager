@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/category.dart';
 import '../utils/formatters.dart';
 import '../utils/money_scope.dart';
+import '../widgets/app_top_bar.dart';
 
 /// Mostra il dialog modale per Creare o Modificare una Categoria (e le sue Sottocategorie)
 Future<TransactionCategory?> showCategoryEditorDialog(
@@ -311,8 +312,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         : provider.incomeCategories;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Categorie Entrate & Uscite'),
+      appBar: const AppTopBar(
+        title: 'Categorie Entrate & Uscite',
+        icon: Icons.category_outlined,
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {

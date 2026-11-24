@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/database_helper.dart';
 import '../utils/money_scope.dart';
+import '../widgets/app_top_bar.dart';
 
 class ThemeCustomizationScreen extends StatelessWidget {
   const ThemeCustomizationScreen({super.key});
@@ -25,8 +26,9 @@ class ThemeCustomizationScreen extends StatelessWidget {
     final provider = MoneyScope.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Personalizzazione & Colori'),
+      appBar: AppTopBar(
+        title: 'Personalizzazione & Colori',
+        icon: Icons.palette_outlined,
         actions: [
           TextButton.icon(
             onPressed: () => provider.resetDefaultThemeColors(),
